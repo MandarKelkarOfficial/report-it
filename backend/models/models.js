@@ -20,6 +20,7 @@ const UserSchema = new Schema(
       trim: true,
     },
     password: { type: String, required: true }, // store hashed pw!
+    contact: { type: String, required: true }, 
     role: {
       type: String,
       enum: ["admin", "field-agent", "manager"],

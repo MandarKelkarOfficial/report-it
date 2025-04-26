@@ -5,7 +5,7 @@
   "main": "Server.js",
   "scripts": {
     "test": "npm run test",
-    "start": "node server.js"
+    "start": "node Server.js"
   },
   "author": "Mandar Kelkar",
   "license": "ISC",

@@ -92,44 +92,24 @@ function requireAgent(req, res, next) {
 
 // Sign Up
 app.post("/api/auth/signup", async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password)
+  const { name, email, password, contact, role } = req.body;
+  if (!name || !email || !password || !contact)
     return res.status(400).json({ msg: "Missing fields" });
   const exists = await User.findOne({ email });
   if (exists) return res.status(409).json({ msg: "Email already in use" });
 
   const hash = await bcrypt.hash(password, 12);
-  const user = await User.create({ name, email, password: hash });
+  const user = await User.create({
+    name,
+    email,
+    password: hash,
+    contact,
+    role,
+  });
   res.status(201).json({ msg: "Registered — awaiting admin approval" });
 });
 
 // Login
-// app.post("/api/auth/login", async (req, res) => {
-//   const { email, password } = req.body;
-//   const user = await User.findOne({ email });
-//   if (!user) return res.status(401).json({ msg: "Invalid credentials" });
-//   if (!user.isApproved)
-//     return res.status(403).json({ msg: "Account not approved yet" });
-
-//   const match = await bcrypt.compare(password, user.password);
-//   if (!match) return res.status(401).json({ msg: "Invalid credentials" });
-
-//   // Issue JWT
-//   const payload = { id: user._id, role: user.role };
-//   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
-
-//   // Create session entry
-//   await Session.create({
-//     user: user._id,
-//     expiresAt: new Date(Date.now() + 8 * 3600000),
-//   });
-
-//   // Log it
-//   await logActivity(user._id, "login", req);
-
-//   res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
-// });
-
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -214,7 +194,6 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 //   }
 // });
 
-
 app.post("/api/auth/logout", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -229,7 +208,6 @@ app.post("/api/auth/logout", authenticateToken, async (req, res) => {
     return res.status(500).json({ msg: "Logout failed" });
   }
 });
-
 
 // --- REPORT ROUTES ---
 // Create a report
@@ -466,7 +444,7 @@ app.get(
 
       return res.json({
         totalReports,
-        totalMinutes,
+        minutes: totalMinutes,
       });
     } catch (err) {
       console.error("Dashboard Stats Error:", err);

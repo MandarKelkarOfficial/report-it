@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router-dom";
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const handleSubmit = e => {
+  // const handleSubmit = (e) => {
+  //   e.preventDefault();
+  //   setError(null);
+  //   login(email, password);
+
+  //   setError(err.response?.data?.message || 'Invalid credentials');
+  // };
+
+  const handleSubmit = async e => {
     e.preventDefault();
-    login(email, password);
+    setError(null); // Reset error on new submission
+    
+    try {
+      await login(email, password);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid credentials or Not approved yet');
+    }
   };
 
   return (
@@ -20,8 +35,18 @@ export default function Login() {
         <div className="mb-10 text-center">
           <div className="inline-flex items-center justify-center space-x-3">
             <div className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.4145.414A1 1 0 0119 5.414V19a2 2 0 01-2 2z" />
+              <svg
+                className="w-6 h-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.4145.414A1 1 0 0119 5.414V19a2 2 0 01-2 2z"
+                />
               </svg>
             </div>
             <h1 className="text-3xl font-bold tracking-tight">
@@ -29,13 +54,17 @@ export default function Login() {
               <span className="text-red-600">-IT</span>
             </h1>
           </div>
-          <p className="mt-4 text-gray-600">Field Reporting Management System</p>
+          <p className="mt-4 text-gray-600">
+            Field Reporting Management System
+          </p>
         </div>
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email Address
+            </label>
             <div className="relative rounded-md shadow-sm">
               <input
                 type="email"
@@ -43,13 +72,18 @@ export default function Login() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 placeholder="name@company.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setError(null); // Clear error on change
+                  setEmail(e.target.value);
+                }}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
             <div className="relative rounded-md shadow-sm">
               <input
                 type="password"
@@ -57,10 +91,16 @@ export default function Login() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 placeholder="••••••••"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
           </div>
+
+          {error && (
+            <div className="text-center p-2 mb-4 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -72,12 +112,18 @@ export default function Login() {
 
         {/* Footer Links */}
         <div className="mt-8 text-center space-y-4">
-          <a href="#forgot-password" className="text-sm text-red-600 hover:text-red-700 font-medium inline-block">
+          <a
+            href="#forgot-password"
+            className="text-sm text-red-600 hover:text-red-700 font-medium inline-block"
+          >
             Forgot your password?
           </a>
           <p className="text-sm text-gray-600">
-            Not registered?{' '}
-            <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-700">
+            Not registered?{" "}
+            <Link
+              to="/signup"
+              className="font-medium text-blue-600 hover:text-blue-700"
+            >
               Create account
             </Link>
           </p>
