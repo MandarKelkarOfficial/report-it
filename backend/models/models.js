@@ -20,7 +20,7 @@ const UserSchema = new Schema(
       trim: true,
     },
     password: { type: String, required: true }, // store hashed pw!
-    contact: { type: String, required: true }, 
+    contact: { type: String, required: true },
     role: {
       type: String,
       enum: ["admin", "field-agent", "manager"],
@@ -51,30 +51,100 @@ UserSchema.index({ resetPasswordExpires: 1 }, { expireAfterSeconds: 0 });
  * - priority
  * - timestamps
  */
+// const ReportSchema = new Schema(
+//   {
+//     agent: {
+//       type: Schema.Types.ObjectId,
+//       ref: "User",
+//       required: true,
+//       index: true,
+//     },
+//     projectNumber: { type: String, required: true, index: true },
+//     customer: { type: String, default: "" },
+
+//     // accept an array of strings
+//     workDone: {
+//       type: [String],
+//       default: [],
+//     },
+
+//     priority: {
+//       type: String,
+//       enum: ["low", "medium", "high"],
+//       default: "medium",
+//     },
+
+//     // make the entire location object optional
+//     location: {
+//       type: {
+//         latitude: Number,
+//         longitude: Number,
+//       },
+//       required: false,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
+
 const ReportSchema = new Schema(
   {
+    // 👷‍♂️ Who submitted the report (their user _id)
     agent: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
     },
-    projectNumber: { type: String, required: true, index: true },
-    customer: { type: String, default: "" },
 
-    // accept an array of strings
+    // 🏷️ Project name (required)
+    projectName: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    projectNumber: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    customer: {
+      type: String,
+      default: "",
+    },
+
+    // ✅ Array of work entries
     workDone: {
       type: [String],
       default: [],
     },
 
+    // 🔖 Priority (required)
     priority: {
       type: String,
       enum: ["low", "medium", "high"],
       default: "medium",
+      required: true,
     },
 
-    // make the entire location object optional
+    // 🚦 Status (required)
+    status: {
+      type: String,
+      enum: ["Open", "In-Progress", "Done", "Closed"],
+      default: "Open",
+      required: true,
+    },
+
+    // 👤 Name of the user who created this report
+    createdBy: {
+      type: String,
+      required: true,
+    },
+
+    // 🌍 Geolocation (optional)
     location: {
       type: {
         latitude: Number,
@@ -84,7 +154,7 @@ const ReportSchema = new Schema(
     },
   },
   {
-    timestamps: true,
+    timestamps: true, // adds createdAt & updatedAt
   }
 );
 
@@ -149,6 +219,26 @@ const TimeSpentSchema = new Schema(
   { timestamps: true }
 );
 
+const ImageSchema = new Schema(
+  {
+    data: { type: Buffer, required: true },
+    contentType: { type: String, required: true },
+  },
+  { _id: false }
+);
+
+const ReportImageSchema = new Schema(
+  {
+    report: { type: Schema.Types.ObjectId, ref: "Report", required: true },
+    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    images: {
+      type: [ImageSchema],
+      validate: [(arr) => arr.length <= 5, "Up to 5 images only"],
+    },
+  },
+  { timestamps: true }
+);
+
 // Export all models
 module.exports = {
   User: mongoose.model("User", UserSchema),
@@ -156,4 +246,5 @@ module.exports = {
   ActivityLog: mongoose.model("ActivityLog", ActivityLogSchema),
   Session: mongoose.model("Session", SessionSchema),
   TimeSpent: mongoose.model("TimeSpent", TimeSpentSchema),
+  ReportImage: mongoose.model("ReportImage", ReportImageSchema),
 };

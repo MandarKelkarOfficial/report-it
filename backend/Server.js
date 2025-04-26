@@ -4,6 +4,7 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const multer = require("multer");
 require("dotenv").config();
 
 const {
@@ -12,6 +13,7 @@ const {
   ActivityLog,
   Session,
   TimeSpent,
+  ReportImage,
 } = require("./models/models");
 
 const app = express();
@@ -19,6 +21,18 @@ const app = express();
 app.set("trust proxy", true);
 app.use(cors());
 app.use(express.json());
+
+// Memory storage so files come in as Buffer
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      return cb(new Error("Only images allowed"), false);
+    }
+    cb(null, true);
+  },
+});
 
 // Connect to MongoDB
 mongoose
@@ -211,17 +225,50 @@ app.post("/api/auth/logout", authenticateToken, async (req, res) => {
 
 // --- REPORT ROUTES ---
 // Create a report
+// backend/server.js (or wherever you define routes)
+
 app.post("/api/reports", authenticateToken, async (req, res) => {
-  const { projectNumber, customer, workDone, priority, location } = req.body;
-  const report = await Report.create({
-    agent: req.user.id,
-    projectNumber,
-    customer,
-    workDone,
-    priority,
-  });
-  await logActivity(req.user.id, "create-report", req);
-  res.status(201).json({ report });
+  try {
+    // Pull everything off the body that your schema now needs
+    const { projectName, projectNumber, customer, workDone, priority, status } =
+      req.body;
+
+    // 🔍 Fetch the full user to get their name
+    const userDoc = await User.findById(req.user.id).select("name");
+    if (!userDoc) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    // Create the report with ALL required fields
+    const report = await Report.create({
+      agent: req.user.id,
+      createdBy: userDoc.name, // string name
+      projectName, // required now
+      projectNumber,
+      customer,
+      workDone,
+      priority,
+      status, // required now
+      // optional
+    });
+
+    // Log the creation activity
+    await logActivity(req.user.id, "create-report", req);
+
+    // Return the new report
+    return res.status(201).json({ report });
+  } catch (err) {
+    console.error("Error creating report:", err);
+    // If it's a Mongoose validation error, show the messages
+    if (err.name === "ValidationError") {
+      const messages = Object.values(err.errors).map((e) => e.message);
+      return res
+        .status(400)
+        .json({ msg: "Validation failed", errors: messages });
+    }
+    // Otherwise, generic 500
+    return res.status(500).json({ msg: "Server error" });
+  }
 });
 
 // Get reports (admin sees all; agents see their own)
@@ -474,6 +521,42 @@ app.get(
 //     }
 //   }
 // );
+
+// POST /api/reports/upload-img-blob
+app.post(
+  "/api/reports/upload-img-blob",
+  authenticateToken,
+  upload.array("images", 5),
+  async (req, res) => {
+    try {
+      const { reportId } = req.body;
+      if (!reportId) {
+        return res.status(400).json({ msg: "reportId is required" });
+      }
+
+      // Build image docs from buffer + mimetype
+      const images = req.files.map((f) => ({
+        data: f.buffer,
+        contentType: f.mimetype,
+      }));
+
+      // Create the document
+      const doc = await ReportImage.create({
+        report: reportId,
+        user: req.user.id,
+        images,
+      });
+
+      res.json({
+        msg: "Images uploaded as blobs!",
+        count: doc.images.length,
+      });
+    } catch (err) {
+      console.error("Error uploading blobs:", err);
+      res.status(500).json({ msg: "Server error during image upload" });
+    }
+  }
+);
 
 // 404 handler
 app.use((_, res) => res.status(404).json({ msg: "Not Found" }));
