@@ -1,0 +1,505 @@
+// backend/server.js
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+require("dotenv").config();
+
+const {
+  User,
+  Report,
+  ActivityLog,
+  Session,
+  TimeSpent,
+} = require("./models/models");
+
+const app = express();
+
+app.set("trust proxy", true);
+app.use(cors());
+app.use(express.json());
+
+// Connect to MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
+
+async function commitTimeForUser(userId) {
+  // find all valid sessions
+  const sessions = await Session.find({ user: userId, valid: true });
+  for (let session of sessions) {
+    const deltaMinutes = Math.floor(
+      (Date.now() - session.createdAt.getTime()) / 60000
+    );
+    console.log(`⏱️  Recording ${deltaMinutes}min for session ${session._id}`);
+
+    await TimeSpent.findOneAndUpdate(
+      { user: userId },
+      { $inc: { minutes: deltaMinutes } },
+      { upsert: true, new: true }
+    );
+
+    session.valid = false;
+    await session.save();
+  }
+}
+
+async function logActivity(userId, action, req) {
+  // Try X-Forwarded-For first, then fall back to req.ip, then socket
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = Array.isArray(forwarded)
+    ? forwarded[0]
+    : typeof forwarded === "string"
+    ? forwarded.split(",")[0].trim()
+    : req.ip || req.socket.remoteAddress || "unknown";
+
+  await ActivityLog.create({
+    user: userId,
+    action,
+    ip, // now a guaranteed string
+    userAgent: req.get("User-Agent"),
+  });
+}
+
+// Middleware: Authenticate JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.sendStatus(401);
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.JWT_SECRET, (err, payload) => {
+    if (err) return res.sendStatus(403);
+    req.user = payload; // { id, role }
+    next();
+  });
+}
+
+// Middleware: Admin-only
+function requireAdmin(req, res, next) {
+  if (req.user.role !== "admin") return res.sendStatus(403);
+  next();
+}
+function requireAgent(req, res, next) {
+  if (req.user.role !== "field-agent") return res.sendStatus(403);
+  next();
+}
+
+// --- AUTH ROUTES ---
+
+// Sign Up
+app.post("/api/auth/signup", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ msg: "Missing fields" });
+  const exists = await User.findOne({ email });
+  if (exists) return res.status(409).json({ msg: "Email already in use" });
+
+  const hash = await bcrypt.hash(password, 12);
+  const user = await User.create({ name, email, password: hash });
+  res.status(201).json({ msg: "Registered — awaiting admin approval" });
+});
+
+// Login
+// app.post("/api/auth/login", async (req, res) => {
+//   const { email, password } = req.body;
+//   const user = await User.findOne({ email });
+//   if (!user) return res.status(401).json({ msg: "Invalid credentials" });
+//   if (!user.isApproved)
+//     return res.status(403).json({ msg: "Account not approved yet" });
+
+//   const match = await bcrypt.compare(password, user.password);
+//   if (!match) return res.status(401).json({ msg: "Invalid credentials" });
+
+//   // Issue JWT
+//   const payload = { id: user._id, role: user.role };
+//   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
+
+//   // Create session entry
+//   await Session.create({
+//     user: user._id,
+//     expiresAt: new Date(Date.now() + 8 * 3600000),
+//   });
+
+//   // Log it
+//   await logActivity(user._id, "login", req);
+
+//   res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
+// });
+
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(401).json({ msg: "Invalid credentials" });
+  if (!user.isApproved)
+    return res.status(403).json({ msg: "Account not approved yet" });
+  if (!(await bcrypt.compare(password, user.password)))
+    return res.status(401).json({ msg: "Invalid credentials" });
+
+  // ✨ Flush any old sessions so timeSpent never resets if they closed browser instead of logging out
+  try {
+    await commitTimeForUser(user._id);
+  } catch (e) {
+    console.error("Error committing time on login:", e);
+  }
+
+  // Issue JWT
+  const payload = { id: user._id, role: user.role };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
+
+  // Create new session
+  await Session.create({
+    user: user._id,
+    expiresAt: new Date(Date.now() + 8 * 3600000),
+  });
+
+  await logActivity(user._id, "login", req);
+
+  res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
+});
+
+// Get profile
+app.get("/api/auth/me", authenticateToken, async (req, res) => {
+  const user = await User.findById(
+    req.user.id,
+    "-password -resetPasswordToken -twoFactor.secret"
+  );
+  res.json({ user });
+});
+
+// Logout
+// app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+//   // Invalidate all sessions for simplicity:
+//   await Session.updateMany({ user: req.user.id }, { valid: false });
+//   await logActivity(req.user.id, "logout", req);
+//   res.json({ msg: "Logged out" });
+// });
+
+// Logout
+// app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     // 1) Find all currently valid sessions for this user
+//     const sessions = await Session.find({ user: userId, valid: true });
+
+//     // 2) For each session, compute time delta and accumulate into TimeSpent
+//     for (let session of sessions) {
+//       const now = Date.now();
+//       const createdAtMs = session.createdAt.getTime();
+//       const deltaMinutes = Math.floor((now - createdAtMs) / 60000);
+
+//       // Upsert into TimeSpent collection
+//       await TimeSpent.findOneAndUpdate(
+//         { user: userId },
+//         { $inc: { minutes: deltaMinutes } },
+//         { upsert: true, new: true }
+//       );
+
+//       // 3) Invalidate that session
+//       session.valid = false;
+//       await session.save();
+//     }
+
+//     // 4) Log the logout activity
+//     await logActivity(userId, "logout", req);
+
+//     return res.json({ msg: "Logged out and time recorded" });
+//   } catch (err) {
+//     console.error("Logout Error:", err);
+//     return res.status(500).json({ msg: "Logout failed" });
+//   }
+// });
+
+
+app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // ✨ Commit time for this session too
+    await commitTimeForUser(userId);
+
+    await logActivity(userId, "logout", req);
+    return res.json({ msg: "Logged out and time recorded" });
+  } catch (err) {
+    console.error("Logout Error:", err);
+    return res.status(500).json({ msg: "Logout failed" });
+  }
+});
+
+
+// --- REPORT ROUTES ---
+// Create a report
+app.post("/api/reports", authenticateToken, async (req, res) => {
+  const { projectNumber, customer, workDone, priority, location } = req.body;
+  const report = await Report.create({
+    agent: req.user.id,
+    projectNumber,
+    customer,
+    workDone,
+    priority,
+  });
+  await logActivity(req.user.id, "create-report", req);
+  res.status(201).json({ report });
+});
+
+// Get reports (admin sees all; agents see their own)
+app.get("/api/reports", authenticateToken, async (req, res) => {
+  const filter = req.user.role === "admin" ? {} : { agent: req.user.id };
+  const reports = await Report.find(filter).populate("agent", "name email");
+  res.json({ reports });
+});
+
+// --- ADMIN ROUTES ---
+// List pending user approvals
+// app.get('/api/admin/pending-users', authenticateToken, requireAdmin, async (_req, res) => {
+//   const users = await User.find({ isApproved: false }, 'name email');
+//   res.json({ users });
+// });
+
+app.get(
+  "/api/admin/pending-users",
+  authenticateToken,
+  requireAdmin,
+  async (_req, res) => {
+    console.log("Api working of pending users...");
+    try {
+      const users = await User.find(
+        { role: { $ne: "admin" } }, // Exclude admin users
+        "name email role createdAt" // Include necessary fields
+      ).lean();
+      res.json({ users });
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Approve or revoke a user
+
+// ==================================================================================================
+// backend/server.js (or routes/users.js)
+app.get(
+  "/api/admin/users",
+  authenticateToken,
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      // Fetch every non-admin user, include isApproved flag
+      const users = await User.find(
+        { role: { $ne: "admin" } },
+        "name email role isApproved createdAt"
+      ).lean();
+
+      return res.json({ users });
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Get user details
+app.get(
+  "/api/admin/users/:id",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.params.id);
+      res.json({ user });
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+// Get user-specific logs
+app.get(
+  "/api/admin/users/:id/logs",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const logs = await ActivityLog.find({ user: req.params.id })
+        .sort("-createdAt")
+        .lean();
+      res.json({ logs });
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+// ==================================================================================================
+
+app.post(
+  "/api/admin/users/:id/:action",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    const { id, action } = req.params;
+    // Only allow "approve" or "revoke"
+    if (!["approve", "revoke"].includes(action)) {
+      return res.status(400).json({ msg: "Invalid action" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { isApproved: action === "approve" },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    await logActivity(req.user.id, `${action}-user:${id}`, req);
+    res.json({ user });
+  }
+);
+
+// View activity logs
+app.get(
+  "/api/admin/logs",
+  authenticateToken,
+  requireAdmin,
+  async (_req, res) => {
+    const logs = await ActivityLog.find()
+      .populate("user", "name")
+      .sort("-createdAt");
+    res.json({ logs });
+  }
+);
+
+app.get(
+  "/api/admin/online",
+  authenticateToken,
+  requireAdmin,
+  async (_req, res) => {
+    const now = new Date();
+    const sessions = await Session.find({
+      valid: true,
+      expiresAt: { $gt: now },
+    }).lean();
+    const onlineUsers = [...new Set(sessions.map((s) => s.user.toString()))];
+    res.json({ onlineUsers });
+  }
+);
+
+//==========================DASHBOARD========================
+
+// Example API endpoints
+app.get(
+  "/api/admin/dashboard-stats",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const stats = {
+        totalUsers: await User.countDocuments(),
+        pendingApprovals: await User.countDocuments({ approved: false }),
+        activeReports: await Report.countDocuments({ status: "active" }),
+      };
+      res.json({ stats });
+    } catch (err) {
+      console.error("Dashboard Stats Error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Field‐agent stats (only agents)
+// Field-Agent Dashboard Stats (in server.js, after your admin route)
+
+// app.get(
+//   "/api/agent/dashboard-stats",
+//   authenticateToken,
+//   requireAgent,
+//   async (req, res) => {
+//     try {
+//       // req.user is already set by authenticateToken
+//       const userId = req.user.id || req.user._id;
+
+//       // 1) Total reports by this agent
+//       const totalReports = await Report.countDocuments({ agent: userId });
+
+//       // 2) Latest "login" action
+//       const lastLogin = await ActivityLog.findOne({
+//         user: userId,
+//         action: "login",
+//       }).sort({ createdAt: -1 });
+
+//       // 3) Minutes since last login
+//       const minutesSinceLogin = lastLogin
+//         ? Math.floor((Date.now() - new Date(lastLogin.createdAt)) / 60000)
+//         : null;
+
+//       // 4) Return same shape as admin
+//       return res.json({
+//         totalReports,
+//         minutesSinceLogin,
+//       });
+//     } catch (err) {
+//       console.error("Dashboard Stats Error:", err);
+//       return res.status(500).json({ message: "Server error" });
+//     }
+//   }
+// );
+
+app.get(
+  "/api/agent/dashboard-stats",
+  authenticateToken,
+  requireAgent,
+  async (req, res) => {
+    try {
+      const userId = req.user.id || req.user._id;
+
+      const totalReports = await Report.countDocuments({ agent: userId });
+
+      // get the cumulative minutes so far
+      const ts = await TimeSpent.findOne({ user: userId }).lean();
+      const totalMinutes = ts.minutes;
+      console.log("Total minutes:", totalMinutes);
+
+      return res.json({
+        totalReports,
+        totalMinutes,
+      });
+    } catch (err) {
+      console.error("Dashboard Stats Error:", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Manager stats (only managers)
+// app.get(
+//   "/api/manager/dashboard-stats",
+//   authenticateToken,
+//   requireManager,
+//   async (req, res) => {
+//     try {
+//       const stats = {
+//         teamReports: await Report.countDocuments({ team: req.user.team }),
+//         completedProjects: await Project.countDocuments({
+//           status: "completed",
+//         }),
+//         ongoingProjects: await Project.countDocuments({ status: "ongoing" }),
+//       };
+//       res.json({ stats });
+//     } catch (err) {
+//       console.error("Dashboard Stats Error:", err);
+//       res.status(500).json({ message: "Server error" });
+//     }
+//   }
+// );
+
+// 404 handler
+app.use((_, res) => res.status(404).json({ msg: "Not Found" }));
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));

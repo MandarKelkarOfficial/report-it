@@ -1,0 +1,88 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+
+export default function Login() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = e => {
+    e.preventDefault();
+    login(email, password);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col items-center justify-center p-4">
+      {/* Main Card Container */}
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl p-8 transform transition-transform duration-300 hover:scale-[1.01]">
+        {/* Logo Header */}
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center justify-center space-x-3">
+            <div className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.4145.414A1 1 0 0119 5.414V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              <span className="text-blue-600">REPORT</span>
+              <span className="text-red-600">-IT</span>
+            </h1>
+          </div>
+          <p className="mt-4 text-gray-600">Field Reporting Management System</p>
+        </div>
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <div className="relative rounded-md shadow-sm">
+              <input
+                type="email"
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                placeholder="name@company.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <div className="relative rounded-md shadow-sm">
+              <input
+                type="password"
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Sign in to your account
+          </button>
+        </form>
+
+        {/* Footer Links */}
+        <div className="mt-8 text-center space-y-4">
+          <a href="#forgot-password" className="text-sm text-red-600 hover:text-red-700 font-medium inline-block">
+            Forgot your password?
+          </a>
+          <p className="text-sm text-gray-600">
+            Not registered?{' '}
+            <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-700">
+              Create account
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

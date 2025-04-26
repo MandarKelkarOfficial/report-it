@@ -1,0 +1,158 @@
+// backend/models/models.js
+const mongoose = require("mongoose");
+const { Schema } = mongoose;
+
+/**
+ * User Schema
+ * - roles: admin, field-agent, manager
+ * - 2FA optional
+ * - approval flow (admin must approve before login)
+ * - password reset tokens with TTL index
+ */
+const UserSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: { type: String, required: true }, // store hashed pw!
+    role: {
+      type: String,
+      enum: ["admin", "field-agent", "manager"],
+      default: "field-agent",
+    },
+    isApproved: { type: Boolean, default: false },
+    // Two‐Factor Auth (e.g. TOTP secret)
+    twoFactor: {
+      enabled: { type: Boolean, default: false },
+      secret: { type: String },
+    },
+    // Password reset
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// auto-delete password reset tokens when expired
+UserSchema.index({ resetPasswordExpires: 1 }, { expireAfterSeconds: 0 });
+
+/**
+ * Report Schema
+ * - each entry from a field agent
+ * - geolocation
+ * - priority
+ * - timestamps
+ */
+const ReportSchema = new Schema(
+  {
+    agent: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    projectNumber: { type: String, required: true, index: true },
+    customer: { type: String, default: "" },
+
+    // accept an array of strings
+    workDone: {
+      type: [String],
+      default: [],
+    },
+
+    priority: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+    },
+
+    // make the entire location object optional
+    location: {
+      type: {
+        latitude: Number,
+        longitude: Number,
+      },
+      required: false,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+/**
+ * ActivityLog Schema
+ * - track user actions: login, logout, report‐submit, etc.
+ */
+const ActivityLogSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    action: { type: String, required: true },
+    ip: { type: String },
+    userAgent: { type: String },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+/**
+ * Session Schema
+ * - manual session store for timeout / invalidation
+ * - TTL index on expiresAt
+ */
+const SessionSchema = new Schema({
+  user: {
+    type: Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+    index: true,
+  },
+  createdAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, required: true },
+  valid: { type: Boolean, default: true },
+});
+
+// auto-remove expired sessions
+SessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// at the bottom of backend/models/models.js
+
+const TimeSpentSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
+      index: true,
+    },
+    minutes: {
+      type: Number,
+      default: 0,
+      // total cumulative minutes
+    },
+  },
+  { timestamps: true }
+);
+
+// Export all models
+module.exports = {
+  User: mongoose.model("User", UserSchema),
+  Report: mongoose.model("Report", ReportSchema),
+  ActivityLog: mongoose.model("ActivityLog", ActivityLogSchema),
+  Session: mongoose.model("Session", SessionSchema),
+  TimeSpent: mongoose.model("TimeSpent", TimeSpentSchema),
+};
