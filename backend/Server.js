@@ -19,8 +19,8 @@ const {
 const app = express();
 
 app.set("trust proxy", true);
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
 // Memory storage so files come in as Buffer
 const upload = multer({
