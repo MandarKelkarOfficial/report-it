@@ -14,6 +14,7 @@ const {
   Session,
   TimeSpent,
   ReportImage,
+  ReportActivity,
 } = require("./models/models");
 
 const app = express();
@@ -272,11 +273,17 @@ app.post("/api/reports", authenticateToken, async (req, res) => {
 });
 
 // Get reports (admin sees all; agents see their own)
-app.get("/api/reports", authenticateToken, async (req, res) => {
-  const filter = req.user.role === "admin" ? {} : { agent: req.user.id };
-  const reports = await Report.find(filter).populate("agent", "name email");
-  res.json({ reports });
-});
+app.get(
+  "/api/reports",
+  authenticateToken,
+  async (req, res) => {
+    // Return absolutely all reports to the client
+    const reports = await Report.find({})
+      .populate("agent", "name email role"); 
+    res.json({ reports });
+  }
+);
+
 
 // --- ADMIN ROUTES ---
 // List pending user approvals
@@ -554,6 +561,75 @@ app.post(
     } catch (err) {
       console.error("Error uploading blobs:", err);
       res.status(500).json({ msg: "Server error during image upload" });
+    }
+  }
+);
+
+// routes/images.js
+app.get("/api/reports/:id/images", async (req, res) => {
+  try {
+    const reportId = req.params.id;
+    const images = await ReportImage.find({ report: reportId });
+    if (!images.length) {
+      return res.status(404).json({ msg: "No images found for this report" });
+    }
+    // Map each doc’s data to a base64 payload
+    const payload = images.map((img) => ({
+      contentType: img.contentType,
+      data: img.data.toString("base64"),
+    }));
+    res.json({ images: payload });
+  } catch (err) {
+    console.error("Error fetching images:", err);
+    res.status(500).json({ msg: "Server error during image fetch" });
+  }
+});
+
+// Fetch activities
+app.get(
+  "/api/report-activity/:reportId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const activity = await ReportActivity.findOne({
+        report: req.params.reportId,
+      }).populate("comments.user", "name role");
+      res.json(activity || { comments: [] });
+    } catch (err) {
+      console.error("Fetch activity error:", err);
+      res.status(500).json({ msg: "Server error" });
+    }
+  }
+);
+
+// Post a comment
+app.post(
+  "/api/report-activity/:reportId/comment",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message)
+        return res.status(400).json({ msg: "Comment cannot be empty" });
+
+      let activity = await ReportActivity.findOne({
+        report: req.params.reportId,
+      });
+
+      if (!activity) {
+        activity = new ReportActivity({
+          report: req.params.reportId,
+          comments: [],
+        });
+      }
+
+      activity.comments.push({ user: req.user.id, message });
+      await activity.save();
+
+      res.status(201).json({ msg: "Comment added", activity });
+    } catch (err) {
+      console.error("Add comment error:", err);
+      res.status(500).json({ msg: "Server error" });
     }
   }
 );

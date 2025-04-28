@@ -239,6 +239,20 @@ const ReportImageSchema = new Schema(
   { timestamps: true }
 );
 
+
+const commentSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const reportActivitySchema = new mongoose.Schema({
+  report: { type: mongoose.Schema.Types.ObjectId, ref: 'Report', required: true },
+  comments: [commentSchema],
+});
+
+
+
 // Export all models
 module.exports = {
   User: mongoose.model("User", UserSchema),
@@ -247,4 +261,5 @@ module.exports = {
   Session: mongoose.model("Session", SessionSchema),
   TimeSpent: mongoose.model("TimeSpent", TimeSpentSchema),
   ReportImage: mongoose.model("ReportImage", ReportImageSchema),
+  ReportActivity: mongoose.model('ReportActivity', reportActivitySchema),
 };

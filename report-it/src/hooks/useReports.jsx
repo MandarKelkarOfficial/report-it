@@ -1,23 +1,16 @@
 import { useState, useEffect } from "react";
-import { API, useAuth } from "../context/AuthContext";
+import { API } from "../context/AuthContext";
 
 export function useReports() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
 
   useEffect(() => {
     const loadReports = async () => {
       try {
         const res = await API.get("/reports");
-        const allReports = res.data.reports || [];
-
-        const filteredReports =
-          user?.role === "admin"
-            ? allReports
-            : allReports.filter((r) => r.userId === user.id || !r.userId);
-
-        setReports(filteredReports);
+        // always take everything—no role-based filtering here
+        setReports(res.data.reports || []);
       } catch (err) {
         console.error("Failed to load reports:", err);
       } finally {
@@ -25,10 +18,8 @@ export function useReports() {
       }
     };
 
-    if (user) {
-      loadReports();
-    }
-  }, [user]);
+    loadReports();
+  }, []);
 
   const addReport = (report) => {
     setReports((prev) => [...prev, report]);

@@ -9,7 +9,7 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 inset-x-0 bg-white/80 backdrop-blur-md border-b border-gray-200 z-50">
+    <nav className="fixed top-0 inset-x-0 bg-white/80 backdrop-blur-md border-b border-gray-200 z-50 mb-5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -51,20 +51,16 @@ export default function Navbar() {
                   Dashboard
                 </Link>
               </li>
-              {user?.role === "field-agent" && (
-                <>
-                  {" "}
-                  <li role="none">
-                    <Link
-                      to="/reports"
-                      role="menuitem"
-                      className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                    >
-                      New Report
-                    </Link>
-                  </li>
-                </>
-              )}
+
+              <li role="none">
+                <Link
+                  to="/reports"
+                  role="menuitem"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  New Report
+                </Link>
+              </li>
 
               <li role="none">
                 <Link
