@@ -109,6 +109,8 @@ const ReportSchema = new Schema(
       type: String,
       required: true,
       index: true,
+      unique: true,
+      trim: true,
     },
 
     customer: {

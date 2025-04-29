@@ -42,7 +42,7 @@ export default function ReportList({ data }) {
   };
 
   return (
-    <div className="mt-16 bg-white rounded-xl shadow-lg p-8 space-y-6">
+    <div className="mt-16 bg-white rounded-xl shadow-lg p-2 space-y-6">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

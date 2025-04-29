@@ -17,9 +17,11 @@ export default function ReportForm({ onAdd }) {
 
   const [images, setImages] = useState([]); // File[]
   const [imgError, setImgError] = useState("");
+  const [errors, setErrors] = useState({});
 
   const handleImageChange = (e) => {
     setImgError("");
+
     const files = Array.from(e.target.files);
     if (files.length + images.length > 5) {
       return setImgError("Maximum 5 images allowed");
@@ -32,11 +34,71 @@ export default function ReportForm({ onAdd }) {
     setImages((prev) => [...prev, ...files]);
   };
 
+  // const submit = async (e) => {
+  //   e.preventDefault();
+  //   setImgError("");
+  //   setErrors({});
+
+  //   // build your payload with the proper user info
+  //   const reportPayload = {
+  //     ...entry,
+  //     agent: currentUser._id,
+  //     createdBy: currentUser.name,
+  //     timestamp: Date.now(),
+  //   };
+
+  //   try {
+  //     // 1) Create the report
+  //     const { data } = await API.post("/reports", reportPayload);
+  //     const reportId = data.report._id;
+
+  //     // 2) If images selected, upload them
+  //     if (images.length) {
+  //       const formData = new FormData();
+  //       formData.append("reportId", reportId);
+  //       images.forEach((file) => formData.append("images", file));
+
+  //       await API.post("/reports/upload-img-blob", formData, {
+  //         headers: { "Content-Type": "multipart/form-data" },
+  //       });
+  //     }
+
+  //     alert("Report submitted successfully! 🎉");
+  //     onAdd({ ...reportPayload, id: reportId, imagesCount: images.length });
+
+  //     // reset form
+  //     setEntry({
+  //       projectName: "",
+  //       projectNumber: "",
+  //       customer: "",
+  //       workDone: [""],
+  //       priority: "medium",
+  //       status: "Open",
+  //     });
+  //     setImages([]);
+  //   } catch (err) {
+  //     console.error("Error saving report:", err);
+  //     alert("Failed to save report to server 😭");
+  //   }
+  // };
+
+  const handleWorkDoneChange = (index, value) => {
+    const newWorkDone = [...entry.workDone];
+    newWorkDone[index] = value;
+    setEntry({ ...entry, workDone: newWorkDone });
+  };
+
+  const addWorkEntry = () => {
+    setEntry({ ...entry, workDone: [...entry.workDone, ""] });
+  };
+
+
+
   const submit = async (e) => {
     e.preventDefault();
     setImgError("");
+    setErrors({});
 
-    // build your payload with the proper user info
     const reportPayload = {
       ...entry,
       agent: currentUser._id,
@@ -49,7 +111,7 @@ export default function ReportForm({ onAdd }) {
       const { data } = await API.post("/reports", reportPayload);
       const reportId = data.report._id;
 
-      // 2) If images selected, upload them
+      // 2) Upload images if any
       if (images.length) {
         const formData = new FormData();
         formData.append("reportId", reportId);
@@ -60,10 +122,11 @@ export default function ReportForm({ onAdd }) {
         });
       }
 
+      // 3) Success!
       alert("Report submitted successfully! 🎉");
-      onAdd({ ...reportPayload, id: reportId, imagesCount: images.length });
+      onAdd({ ...reportPayload, _id: reportId, imagesCount: images.length });
 
-      // reset form
+      // 4) Reset form
       setEntry({
         projectName: "",
         projectNumber: "",
@@ -74,20 +137,28 @@ export default function ReportForm({ onAdd }) {
       });
       setImages([]);
     } catch (err) {
+      const res = err.response;
+
+      // Duplicate projectNumber error
+      if (res?.status === 400 && res.data.field === "projectNumber") {
+        setErrors({ projectNumber: res.data.msg });
+        return;
+      }
+
+      // Other client validation errors (optional)
+      if (res?.status === 400 && res.data.errors) {
+        // pick first or map
+        setErrors({ projectNumber: res.data.errors[0] });
+        return;
+      }
+
+      // Fallback
       console.error("Error saving report:", err);
       alert("Failed to save report to server 😭");
     }
   };
 
-  const handleWorkDoneChange = (index, value) => {
-    const newWorkDone = [...entry.workDone];
-    newWorkDone[index] = value;
-    setEntry({ ...entry, workDone: newWorkDone });
-  };
 
-  const addWorkEntry = () => {
-    setEntry({ ...entry, workDone: [...entry.workDone, ""] });
-  };
   return (
     <>
       <br />
@@ -161,16 +232,21 @@ export default function ReportForm({ onAdd }) {
                 Project Number *
               </label>
               <div className="relative rounded-md shadow-sm">
-                <input
-                  type="text"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  placeholder="Enter project number"
-                  value={entry.projectNumber}
-                  onChange={(e) =>
-                    setEntry({ ...entry, projectNumber: e.target.value })
-                  }
-                />
+              <input
+            type="text"
+            required
+            className={`w-full px-4 py-3 border ${
+              errors.projectNumber
+                ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+            } rounded-lg transition-all`}
+            placeholder="Enter project number"
+            value={entry.projectNumber}
+            onChange={(e) => {
+              setEntry({ ...entry, projectNumber: e.target.value });
+              setErrors({ ...errors, projectNumber: null });
+            }}
+          />
                 <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                   <svg
                     className="h-5 w-5 text-gray-400"
@@ -185,6 +261,11 @@ export default function ReportForm({ onAdd }) {
                   </svg>
                 </div>
               </div>
+              {errors.projectNumber && (
+          <p className="mt-2 text-sm text-red-600">
+            {errors.projectNumber}
+          </p>
+        )}
             </div>
           </div>
 

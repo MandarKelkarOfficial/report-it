@@ -14,7 +14,7 @@ export default function Reports() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-0">
       <ReportForm onAdd={addReport} />
       {/* <ReportList data={reports} /> */}
     </div>

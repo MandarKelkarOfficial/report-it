@@ -103,6 +103,11 @@ function requireAgent(req, res, next) {
   next();
 }
 
+function requireManager(req, res, next) {
+  if (req.user.role !== "manager") return res.sendStatus(403);
+  next();
+}
+
 // --- AUTH ROUTES ---
 
 // Sign Up
@@ -260,30 +265,43 @@ app.post("/api/reports", authenticateToken, async (req, res) => {
     return res.status(201).json({ report });
   } catch (err) {
     console.error("Error creating report:", err);
-    // If it's a Mongoose validation error, show the messages
+
+    // Duplicate key (unique index) error
+    if (err.code === 11000 && err.keyPattern?.projectNumber) {
+      return res
+        .status(400)
+        .json({ field: "projectNumber", msg: "Project number already exists" });
+    }
+
+    // Mongoose validation errors
     if (err.name === "ValidationError") {
       const messages = Object.values(err.errors).map((e) => e.message);
       return res
         .status(400)
         .json({ msg: "Validation failed", errors: messages });
     }
-    // Otherwise, generic 500
+
     return res.status(500).json({ msg: "Server error" });
   }
+
+  // If it's a Mongoose validation error, show the messages
+  //   if (err.name === "ValidationError") {
+  //     const messages = Object.values(err.errors).map((e) => e.message);
+  //     return res
+  //       .status(400)
+  //       .json({ msg: "Validation failed", errors: messages });
+  //   }
+  //   // Otherwise, generic 500
+  //   return res.status(500).json({ msg: "Server error" });
+  // }
 });
 
 // Get reports (admin sees all; agents see their own)
-app.get(
-  "/api/reports",
-  authenticateToken,
-  async (req, res) => {
-    // Return absolutely all reports to the client
-    const reports = await Report.find({})
-      .populate("agent", "name email role"); 
-    res.json({ reports });
-  }
-);
-
+app.get("/api/reports", authenticateToken, async (req, res) => {
+  // Return absolutely all reports to the client
+  const reports = await Report.find({}).populate("agent", "name email role");
+  res.json({ reports });
+});
 
 // --- ADMIN ROUTES ---
 // List pending user approvals
@@ -432,8 +450,10 @@ app.get(
     try {
       const stats = {
         totalUsers: await User.countDocuments(),
-        pendingApprovals: await User.countDocuments({ approved: false }),
-        activeReports: await Report.countDocuments({ status: "active" }),
+        pendingApprovals: await User.countDocuments({ isApproved: false }),
+        activeReports: await Report.countDocuments({
+          status: { $in: ["Open", "In-Progress"] },
+        }),
       };
       res.json({ stats });
     } catch (err) {
@@ -444,42 +464,6 @@ app.get(
 );
 
 // Field‐agent stats (only agents)
-// Field-Agent Dashboard Stats (in server.js, after your admin route)
-
-// app.get(
-//   "/api/agent/dashboard-stats",
-//   authenticateToken,
-//   requireAgent,
-//   async (req, res) => {
-//     try {
-//       // req.user is already set by authenticateToken
-//       const userId = req.user.id || req.user._id;
-
-//       // 1) Total reports by this agent
-//       const totalReports = await Report.countDocuments({ agent: userId });
-
-//       // 2) Latest "login" action
-//       const lastLogin = await ActivityLog.findOne({
-//         user: userId,
-//         action: "login",
-//       }).sort({ createdAt: -1 });
-
-//       // 3) Minutes since last login
-//       const minutesSinceLogin = lastLogin
-//         ? Math.floor((Date.now() - new Date(lastLogin.createdAt)) / 60000)
-//         : null;
-
-//       // 4) Return same shape as admin
-//       return res.json({
-//         totalReports,
-//         minutesSinceLogin,
-//       });
-//     } catch (err) {
-//       console.error("Dashboard Stats Error:", err);
-//       return res.status(500).json({ message: "Server error" });
-//     }
-//   }
-// );
 
 app.get(
   "/api/agent/dashboard-stats",
@@ -508,26 +492,28 @@ app.get(
 );
 
 // Manager stats (only managers)
-// app.get(
-//   "/api/manager/dashboard-stats",
-//   authenticateToken,
-//   requireManager,
-//   async (req, res) => {
-//     try {
-//       const stats = {
-//         teamReports: await Report.countDocuments({ team: req.user.team }),
-//         completedProjects: await Project.countDocuments({
-//           status: "completed",
-//         }),
-//         ongoingProjects: await Project.countDocuments({ status: "ongoing" }),
-//       };
-//       res.json({ stats });
-//     } catch (err) {
-//       console.error("Dashboard Stats Error:", err);
-//       res.status(500).json({ message: "Server error" });
-//     }
-//   }
-// );
+app.get(
+  "/api/manager/dashboard-stats",
+  authenticateToken,
+  requireManager,
+  async (req, res) => {
+    try {
+      const stats = {
+        teamReports: await Report.countDocuments(),
+        completedProjects: await Report.countDocuments({
+          status: "Done",
+        }),
+        ongoingProjects: await Report.countDocuments({
+          status: "In-Progress",
+        }),
+      };
+      res.json({ stats });
+    } catch (err) {
+      console.error("Dashboard Stats Error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
 
 // POST /api/reports/upload-img-blob
 app.post(
