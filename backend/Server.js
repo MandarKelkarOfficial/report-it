@@ -108,6 +108,9 @@ function requireManager(req, res, next) {
   next();
 }
 
+app.get("/", async (req, res) => {
+  res.json({ msg: "Welcome to Report-It API!" });
+});
 // --- AUTH ROUTES ---
 
 // Sign Up
