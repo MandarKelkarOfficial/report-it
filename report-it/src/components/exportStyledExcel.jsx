@@ -1,67 +1,305 @@
 // src/components/exportStyledExcel.jsx
-import ExcelJS from "exceljs";
+import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import axios from "axios";
+import { API } from "../context/AuthContext";
+
+/**
+ * Converts a Base64 string to a Uint8Array.
+ * @param {string} base64 - The base64 encoded string.
+ * @returns {Uint8Array}
+ */
+function base64ToUint8Array(base64) {
+  try {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  } catch (error) {
+    console.error("Failed to decode base64 string:", error);
+    return new Uint8Array(0); // Return empty array on failure
+  }
+}
+
+async function uploadToDrive(fileBlob) {
+  const formData = new FormData();
+  formData.append("report", fileBlob, "precimac_reports_online.xlsx");
+
+  try {
+    await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/upload-to-drive`, formData);
+    alert("Uploaded to Google Drive!");
+  } catch (err) {
+    console.error("Drive upload error:", err);
+    alert("Failed to upload to Drive.");
+  }
+}
+
+
+
+// export function useStyledExport(data) {
+//   const exportStyledExcel = async () => {
+//     if (!data || !data.length) {
+//       return alert("No reports to export! 📭");
+//     }
+
+//     // --- STEP 1: Fetch all images concurrently ---
+//     console.log("Fetching images for reports...");
+//     const imagePromises = data.map((report) =>
+//       API.get(`/reports/${report._id}/images`)
+//         .then((res) => ({ reportId: report._id, images: res.data.images || [] }))
+//         .catch((err) => {
+//           console.warn(`Could not fetch images for report ${report._id}:`, err);
+//           return { reportId: report._id, images: [] };
+//         })
+//     );
+
+//     const settledImages = await Promise.all(imagePromises);
+//     const imageMap = {};
+//     let maxImages = 0;
+
+//     for (const item of settledImages) {
+//       imageMap[item.reportId] = item.images;
+//       if (item.images.length > maxImages) {
+//         maxImages = item.images.length;
+//       }
+//     }
+
+//     console.log("Image fetching complete. Max images in any report:", maxImages);
+
+//     // --- STEP 2: Build the Excel file ---
+//     const wb = new ExcelJS.Workbook();
+//     const ws = wb.addWorksheet("Precimac Reports");
+
+//     // Define static columns
+//     const columns = [
+//       { header: "Project ID", key: "projectNumber", width: 15 },
+//       { header: "Project Name", key: "projectName", width: 25 },
+//       { header: "Agent Name", key: "createdBy", width: 20 },
+//       { header: "Customer", key: "customer", width: 20 },
+//       { header: "Work Done", key: "workDone", width: 30 },
+//       { header: "Date", key: "date", width: 15 },
+//       { header: "Status", key: "status", width: 12 },
+//       { header: "Priority", key: "priority", width: 12 },
+//     ];
+
+//     // Dynamically add image columns
+//     for (let i = 0; i < maxImages; i++) {
+//       columns.push({
+//         header: `Image ${i + 1}`,
+//         key: `image${i + 1}`,
+//         width: 25,
+//       });
+//     }
+
+//     ws.columns = columns;
+//     ws.getRow(1).font = { bold: true };
+
+//     for (const r of data) {
+//       const row = ws.addRow({
+//         projectNumber: r.projectNumber,
+//         projectName: r.projectName,
+//         createdBy: r.agent?.name || "N/A",
+//         customer: r.customer,
+//         workDone: Array.isArray(r.workDone) ? r.workDone.join(", ") : r.workDone,
+//         date: new Date(r.createdAt).toLocaleDateString(),
+//         status: r.status,
+//         priority: r.priority,
+//       });
+
+//       const images = imageMap[r._id] || [];
+//       if (images.length > 0) {
+//         row.height = 100;
+
+//         for (let j = 0; j < images.length; j++) {
+//           try {
+//             const imageData = images[j];
+//             if (!imageData?.data) continue;
+
+//             const buffer = base64ToUint8Array(imageData.data);
+//             if (buffer.length === 0) continue;
+
+//             const extension = imageData.contentType?.split("/")?.[1] || "jpeg";
+
+//             const imageId = wb.addImage({
+//               buffer: buffer,
+//               extension: extension,
+//             });
+
+//             // Column offset: 8 static columns → images start at col 8 (0-based)
+//             const imageColumnIndex = 8 + j;
+
+//             ws.addImage(imageId, {
+//               tl: { col: imageColumnIndex, row: row.number - 1 },
+//               ext: { width: 130, height: 130 },
+//             });
+//           } catch (imageError) {
+//             console.error(`Failed to process image for report ${r._id}:`, imageError);
+//           }
+//         }
+//       }
+//     }
+
+//     ws.autoFilter = `A1:${String.fromCharCode(65 + columns.length - 1)}1`;
+//     ws.views = [{ state: "frozen", ySplit: 1 }];
+
+//     const buffer = await wb.xlsx.writeBuffer();
+//     const blob = new Blob([buffer], {
+//       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+//     });
+
+//     saveAs(blob, "precimac_reports_online.xlsx");
+//     await uploadToDrive(blob);
+//   };
+
+//   return exportStyledExcel;
+// }
+
 
 export function useStyledExport(data) {
   const exportStyledExcel = async () => {
-    if (!data.length) {
+    if (!data || !data.length) {
       return alert("No reports to export! 📭");
     }
 
-    // 1️⃣ Create workbook & worksheet
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Reports");
+    // --- STEP 1: Fetch all images concurrently ---
+    console.log("Fetching images for reports...");
+    const imagePromises = data.map((report) =>
+      API.get(`/reports/${report._id}/images`)
+        .then((res) => ({ reportId: report._id, images: res.data.images || [] }))
+        .catch((err) => {
+          console.warn(`Could not fetch images for report ${report._id}:`, err);
+          return { reportId: report._id, images: [] };
+        })
+    );
 
-    // 2️⃣ Define columns (incl. Created By, Status, Images)
-    ws.columns = [
-        { header: "Created By", key: "createdBy", width: 20 },
-      { header: "Project #", key: "projectNumber", width: 15 },
+    const settledImages = await Promise.all(imagePromises);
+    const imageMap = {};
+    let maxImages = 0;
+
+    for (const item of settledImages) {
+      imageMap[item.reportId] = item.images;
+      if (item.images.length > maxImages) {
+        maxImages = item.images.length;
+      }
+    }
+
+    console.log("Image fetching complete. Max images in any report:", maxImages);
+
+    // --- STEP 2A: Build the Regular Report Excel (NO IMAGES) ---
+    const wb1 = new ExcelJS.Workbook();
+    const ws1 = wb1.addWorksheet("Precimac Reports");
+
+    ws1.columns = [
+      { header: "Project ID", key: "projectNumber", width: 15 },
+      { header: "Project Name", key: "projectName", width: 25 },
+      { header: "Agent Name", key: "createdBy", width: 20 },
       { header: "Customer", key: "customer", width: 20 },
       { header: "Work Done", key: "workDone", width: 30 },
-      { header: "Status", key: "status", width: 15 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Status", key: "status", width: 12 },
       { header: "Priority", key: "priority", width: 12 },
-      { header: "Images", key: "imagesCount", width: 10 },
-      { header: "Created At", key: "createdAt", width: 20 },
     ];
 
-    // 3️⃣ Style header row
-    ws.getRow(1).eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF1D4ED8" }, // Indigo 600
-      };
-      cell.alignment = { vertical: "middle", horizontal: "center" };
-    });
+    ws1.getRow(1).font = { bold: true };
 
-    // 4️⃣ Helper for workDone join
-    const joinWork = (wd) => (Array.isArray(wd) ? wd.join("; ") : wd || "-");
-
-    // 5️⃣ Populate rows
-    data.forEach((r) => {
-      ws.addRow({
-        createdBy: r.createdBy || "-",
+    for (const r of data) {
+      ws1.addRow({
         projectNumber: r.projectNumber,
+        projectName: r.projectName,
+        createdBy: r.agent?.name || "N/A",
         customer: r.customer,
-        workDone: joinWork(r.workDone),
-        status: r.status || "-",
+        workDone: Array.isArray(r.workDone) ? r.workDone.join(", ") : r.workDone,
+        date: new Date(r.createdAt).toLocaleDateString(),
+        status: r.status,
         priority: r.priority,
-        imagesCount: r.imagesCount ?? 0,
-        createdAt: new Date(r.createdAt).toLocaleString(),
       });
+    }
+
+    ws1.autoFilter = "A1:H1";
+    ws1.views = [{ state: "frozen", ySplit: 1 }];
+
+    const buffer1 = await wb1.xlsx.writeBuffer();
+    const blob1 = new Blob([buffer1], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
+    saveAs(blob1, "precimac_reports_online.xlsx");
+    await uploadToDrive(blob1); // Optional: Remove if not needed
 
-    // 6️⃣ Auto-filter & freeze header
-    ws.autoFilter = "A1:I1";
-    ws.views = [{ state: "frozen", ySplit: 1 }];
+    // --- STEP 2B: Build the Images Report Excel ---
+    const wb2 = new ExcelJS.Workbook();
+    const ws2 = wb2.addWorksheet("Images Data");
 
-    // 7️⃣ Generate & download
-    const buf = await wb.xlsx.writeBuffer();
-    saveAs(
-      new Blob([buf], { type: "application/octet-stream" }),
-      `Reports_${Date.now()}.xlsx`
-    );
+    // Define static headers
+    const imageColumns = [
+      { header: "Project ID", key: "projectNumber", width: 15 },
+      { header: "Project Name", key: "projectName", width: 25 },
+      { header: "Agent Name", key: "createdBy", width: 20 },
+      { header: "Date Created", key: "date", width: 15 },
+    ];
+
+    // Add dynamic image columns
+    for (let i = 0; i < maxImages; i++) {
+      imageColumns.push({
+        header: `Image ${i + 1}`,
+        key: `image${i + 1}`,
+        width: 25,
+      });
+    }
+
+    ws2.columns = imageColumns;
+    ws2.getRow(1).font = { bold: true };
+
+    for (const r of data) {
+      const row = ws2.addRow({
+        projectNumber: r.projectNumber,
+        projectName: r.projectName,
+        createdBy: r.agent?.name || "N/A",
+        date: new Date(r.createdAt).toLocaleDateString(),
+      });
+
+      const images = imageMap[r._id] || [];
+
+      if (images.length > 0) {
+        row.height = 100;
+
+        for (let j = 0; j < images.length; j++) {
+          try {
+            const imageData = images[j];
+            if (!imageData?.data) continue;
+
+            const buffer = base64ToUint8Array(imageData.data);
+            if (buffer.length === 0) continue;
+
+            const extension = imageData.contentType?.split("/")?.[1] || "jpeg";
+
+            const imageId = wb2.addImage({
+              buffer: buffer,
+              extension: extension,
+            });
+
+            const imageColumnIndex = 4 + j; // after the 4 static columns
+            ws2.addImage(imageId, {
+              tl: { col: imageColumnIndex, row: row.number - 1 },
+              ext: { width: 130, height: 130 },
+            });
+          } catch (error) {
+            console.error(`Image error for report ${r._id}`, error);
+          }
+        }
+      }
+    }
+
+    ws2.autoFilter = `A1:${String.fromCharCode(65 + imageColumns.length - 1)}1`;
+    ws2.views = [{ state: "frozen", ySplit: 1 }];
+
+    const buffer2 = await wb2.xlsx.writeBuffer();
+    const blob2 = new Blob([buffer2], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    saveAs(blob2, "precimac_images_data.xlsx");
   };
 
   return exportStyledExcel;

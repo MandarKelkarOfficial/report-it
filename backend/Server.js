@@ -5,6 +5,9 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const { uploadReportToDrive } = require("./service/googleDrive");
 require("dotenv").config();
 
 const {
@@ -24,17 +27,22 @@ app.use(express.json());
 app.use(cors());
 
 // Memory storage so files come in as Buffer
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
-  fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Only images allowed"), false);
-    }
-    cb(null, true);
-  },
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
+//   fileFilter: (_req, file, cb) => {
+//     if (!file.mimetype.startsWith("image/")) {
+//       return cb(new Error("Only images allowed"), false);
+//     }
+//     cb(null, true);
+//   },
+// });
+
+const reportUpload = multer({
+  dest: path.join(__dirname, "uploads"), // temporary local folder
 });
 
+const upload = multer({ dest: "uploads/" });
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI, {
@@ -555,24 +563,30 @@ app.post(
 );
 
 // routes/images.js
+
 app.get("/api/reports/:id/images", async (req, res) => {
   try {
     const reportId = req.params.id;
-    const images = await ReportImage.find({ report: reportId });
-    if (!images.length) {
+    const imageDocs = await ReportImage.find({ report: reportId });
+
+    if (!imageDocs.length) {
       return res.status(404).json({ msg: "No images found for this report" });
     }
-    // Map each doc’s data to a base64 payload
-    const payload = images.map((img) => ({
-      contentType: img.contentType,
-      data: img.data.toString("base64"),
-    }));
+
+    const payload = imageDocs.flatMap((doc) =>
+      doc.images.map((img) => ({
+        contentType: img.contentType,
+        data: img.data.toString("base64"),
+      }))
+    );
+
     res.json({ images: payload });
   } catch (err) {
     console.error("Error fetching images:", err);
     res.status(500).json({ msg: "Server error during image fetch" });
   }
 });
+
 
 // Fetch activities
 app.get(
@@ -623,6 +637,47 @@ app.post(
   }
 );
 
+
+// --- EXPORTS ---
+
+// app.post("/api/upload-to-drive", reportUpload.single("report"), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       console.error("❌ No file uploaded to server");
+//       return res.status(400).json({ msg: "No file uploaded" });
+//     }
+
+//     const filePath = req.file.path;
+//     console.log("📦 File received at:", filePath);
+
+//     // This call will now work because uploadReportToDrive is a function
+//     const result = await uploadReportToDrive(filePath);
+
+//     fs.unlinkSync(filePath); // clean local copy
+//     res.json({ msg: "Uploaded to Drive", fileId: result.id });
+//   } catch (err) {
+//     console.error("Drive upload error:", err);
+//     res.status(500).json({ msg: "Drive upload failed" });
+//   }
+// });
+
+
+
+app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).send("No file received");
+
+    const fileId = await uploadReportToDrive(file.path, file.originalname, file.mimetype);
+
+    // Optional: delete the local file after uploading
+    fs.unlink(file.path, () => null);
+
+    res.status(200).json({ message: "File uploaded", fileId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // 404 handler
 app.use((_, res) => res.status(404).json({ msg: "Not Found" }));
 
