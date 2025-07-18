@@ -31,7 +31,7 @@ app.use(cors({
 }));
 
 
-
+const JWT_SECRET = process.env.JWT_SECRET
 
 const reportUpload = multer({
   dest: path.join(__dirname, "uploads"), // temporary local folder
@@ -676,7 +676,6 @@ app.post("/api/device/register", authenticateToken, async (req, res) => {
 });
 
 
-// Auto login using saved device MAC ID
 app.post("/api/device/check", async (req, res) => {
   console.log(" /api/device/check API called");
 
@@ -688,6 +687,10 @@ app.post("/api/device/check", async (req, res) => {
 
     if (!device) {
       return res.status(404).json({ msg: "Device not registered. Contact admin." });
+    }
+
+    if (!device.user) {
+      return res.status(404).json({ msg: "User linked to device not found" });
     }
 
     if (!device.hasLoggedInOnce) {
@@ -714,7 +717,7 @@ app.post("/api/device/check", async (req, res) => {
     res.json({
       token,
       user: {
-        id: device.user._id,
+        _id: device.user._id, // 👈 FIXED HERE
         name: device.user.name,
         role: device.user.role,
       },
@@ -726,19 +729,6 @@ app.post("/api/device/check", async (req, res) => {
 });
 
 
-const JWT_SECRET = process.env.JWT_SECRET
-
-// Return approved users (for Flutter login search)
-// app.get("/api/auth/me-list", async (req, res) => {
-//   console.log(" /me-list API called");
-//   try {
-//     const users = await User.find({ isApproved: true }).select("name contact isApproved");
-//     res.json({ users });
-//   } catch (err) {
-//     console.error("Error fetching users list:", err);
-//     res.status(500).json({ msg: "Server error" });
-//   }
-// });
 
 
 app.get("/api/auth/me-list", async (req, res) => {
