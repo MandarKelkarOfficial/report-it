@@ -253,6 +253,29 @@ const reportActivitySchema = new mongoose.Schema({
   comments: [commentSchema],
 });
 
+//Mobile Device Info Schema
+// - track devices used by users
+const DeviceInfoSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    macId: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    deviceName: { type: String, required: true },
+    hasLoggedInOnce: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+DeviceInfoSchema.index({ macId: 1 }); // Fast lookup by MAC
+
 
 
 // Export all models
@@ -264,4 +287,6 @@ module.exports = {
   TimeSpent: mongoose.model("TimeSpent", TimeSpentSchema),
   ReportImage: mongoose.model("ReportImage", ReportImageSchema),
   ReportActivity: mongoose.model('ReportActivity', reportActivitySchema),
+  DeviceInfo: mongoose.model("DeviceInfo", DeviceInfoSchema),
+
 };

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
+import logo from "../assets/img/logo.png"; // Adjust the path as necessary
 
 export default function Signup() {
   const { signup } = useAuth();
@@ -43,25 +44,8 @@ export default function Signup() {
         {/* Logo Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center justify-center space-x-3">
-            <div className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.4145.414A1 1 0 0119 5.414V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              <span className="text-blue-600">REPORT</span>
-              <span className="text-red-600">-IT</span>
-            </h1>
+       
+        <img src={logo} alt="Logo" />
           </div>
           <p className="mt-4 text-gray-600">
             Field Reporting Management System

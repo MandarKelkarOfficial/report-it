@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import logo from "../assets/icon-one.svg";
+import logo from "../assets/img/logo.png"; // Adjust the path as necessary
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -19,19 +19,16 @@ export default function Navbar() {
               className="flex items-center space-x-2"
               aria-label="Go to dashboard"
             >
-              <div className="bg-white-600 w-8 h-8 rounded-lg flex items-center justify-center">
+              <div className="bg-white-600 w-8 h-8 rounded-lg flex items-center justify-left w-25">
                 <img
-                  className="w-6 h-6 text-white"
+                  className=" h-10 text-white"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                   aria-hidden="true"
                   src={logo}
                 />
               </div>
-              <span className="text-xl font-bold">
-                <span className="text-blue-600">REPORT</span>
-                <span className="text-red-600">-IT</span>
-              </span>
+    
             </Link>
           </div>
 
@@ -169,7 +166,7 @@ export default function Navbar() {
               >
                 Dashboard
               </Link>
-              {user?.role === "field-agent" && (
+              {/* {user?.role === "field-agent" && ( */}
                 <Link
                   to="/reports"
                   onClick={() => setIsMenuOpen(false)}
@@ -178,7 +175,7 @@ export default function Navbar() {
                 >
                   New Report
                 </Link>
-              )}
+              {/* )} */}
               <Link
                 to="/view"
                 onClick={() => setIsMenuOpen(false)}

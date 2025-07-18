@@ -20,3 +20,11 @@ PROJECT NAME : REPORT-IT
 - User Profile Management (Update Profile, Change Password)
 - User Activity Logs (Track user actions within the app) //
 - Session Management (Timeout, Logout on inactivity) //
+
+
+Core : 
+
+- App download from personal website(otp verification)
+- Employee code for user verification
+- Dashboard for user(display neme date etc)
+- automatic location capture

@@ -18,6 +18,7 @@ const {
   TimeSpent,
   ReportImage,
   ReportActivity,
+  DeviceInfo,
 } = require("./models/models");
 
 const app = express();
@@ -181,50 +182,6 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
   res.json({ user });
 });
 
-// Logout
-// app.post("/api/auth/logout", authenticateToken, async (req, res) => {
-//   // Invalidate all sessions for simplicity:
-//   await Session.updateMany({ user: req.user.id }, { valid: false });
-//   await logActivity(req.user.id, "logout", req);
-//   res.json({ msg: "Logged out" });
-// });
-
-// Logout
-// app.post("/api/auth/logout", authenticateToken, async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-
-//     // 1) Find all currently valid sessions for this user
-//     const sessions = await Session.find({ user: userId, valid: true });
-
-//     // 2) For each session, compute time delta and accumulate into TimeSpent
-//     for (let session of sessions) {
-//       const now = Date.now();
-//       const createdAtMs = session.createdAt.getTime();
-//       const deltaMinutes = Math.floor((now - createdAtMs) / 60000);
-
-//       // Upsert into TimeSpent collection
-//       await TimeSpent.findOneAndUpdate(
-//         { user: userId },
-//         { $inc: { minutes: deltaMinutes } },
-//         { upsert: true, new: true }
-//       );
-
-//       // 3) Invalidate that session
-//       session.valid = false;
-//       await session.save();
-//     }
-
-//     // 4) Log the logout activity
-//     await logActivity(userId, "logout", req);
-
-//     return res.json({ msg: "Logged out and time recorded" });
-//   } catch (err) {
-//     console.error("Logout Error:", err);
-//     return res.status(500).json({ msg: "Logout failed" });
-//   }
-// });
-
 app.post("/api/auth/logout", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -295,16 +252,6 @@ app.post("/api/reports", authenticateToken, async (req, res) => {
     return res.status(500).json({ msg: "Server error" });
   }
 
-  // If it's a Mongoose validation error, show the messages
-  //   if (err.name === "ValidationError") {
-  //     const messages = Object.values(err.errors).map((e) => e.message);
-  //     return res
-  //       .status(400)
-  //       .json({ msg: "Validation failed", errors: messages });
-  //   }
-  //   // Otherwise, generic 500
-  //   return res.status(500).json({ msg: "Server error" });
-  // }
 });
 
 // Get reports (admin sees all; agents see their own)
@@ -638,28 +585,189 @@ app.post(
 );
 
 
-// --- EXPORTS ---
+//Mobile Device Info
 
-// app.post("/api/upload-to-drive", reportUpload.single("report"), async (req, res) => {
+
+// --- DEVICE ROUTES ---
+// Register device (first login from app)
+// app.post("/api/device/register", authenticateToken, async (req, res) => {
+//   console.log(" /api/device/register API called");
+
+//   const { macId, deviceName } = req.body;
+
+//   if (!macId || !deviceName) {
+//     return res.status(400).json({ msg: "Missing macId or deviceName" });
+//   }
+
 //   try {
-//     if (!req.file) {
-//       console.error("❌ No file uploaded to server");
-//       return res.status(400).json({ msg: "No file uploaded" });
+//     const existingMac = await DeviceInfo.findOne({ macId });
+
+//     if (existingMac) {
+//       // MAC already exists — don't allow reuse
+//       return res.status(409).json({ msg: "Device already registered with another user" });
 //     }
 
-//     const filePath = req.file.path;
-//     console.log("📦 File received at:", filePath);
+//     const existingDevice = await DeviceInfo.findOne({ user: req.user.id });
 
-//     // This call will now work because uploadReportToDrive is a function
-//     const result = await uploadReportToDrive(filePath);
+//     if (existingDevice) {
+//       // User already has a device, deny registration from new device
+//       return res.status(403).json({
+//         msg: "Device already registered. Please contact admin to approve new device.",
+//       });
+//     }
 
-//     fs.unlinkSync(filePath); // clean local copy
-//     res.json({ msg: "Uploaded to Drive", fileId: result.id });
+//     await DeviceInfo.create({
+//       user: req.user.id,
+//       macId,
+//       deviceName,
+//       hasLoggedInOnce: true,
+//     });
+
+//     res.status(201).json({ msg: "✅ Device registered successfully." });
 //   } catch (err) {
-//     console.error("Drive upload error:", err);
-//     res.status(500).json({ msg: "Drive upload failed" });
+//     console.error("❌ Device register error:", err);
+//     res.status(500).json({ msg: "Server error" });
 //   }
 // });
+
+
+app.post("/api/device/register", authenticateToken, async (req, res) => {
+  console.log(" /api/device/register API called");
+
+  const { macId, deviceName, force } = req.body;
+
+  if (!macId || !deviceName) {
+    return res.status(400).json({ msg: "Missing macId or deviceName" });
+  }
+
+  try {
+    const userId = req.user.id;
+
+    const existingMac = await DeviceInfo.findOne({ macId });
+
+    if (existingMac) {
+      return res.status(409).json({ msg: "Device already registered with another user" });
+    }
+
+    const existingDevice = await DeviceInfo.findOne({ user: userId });
+
+    if (existingDevice && !force) {
+      return res.status(403).json({
+        msg: "Device already registered. Click 'Register New Device' if this is a new device.",
+      });
+    }
+
+    // Mark user as unapproved (requires admin intervention)
+    await User.findByIdAndUpdate(userId, {
+      isApproved: false,
+      deviceNote: "Login attempt from new device - approval required",
+    });
+
+    // Remove old devices (optional if one-device policy)
+    // await DeviceInfo.deleteMany({ user: userId });
+
+    // Register new device
+    await DeviceInfo.create({
+      user: userId,
+      macId,
+      deviceName,
+      hasLoggedInOnce: true,
+    });
+
+    res.status(201).json({ msg: "Device registered, waiting for admin approval." });
+  } catch (err) {
+    console.error("❌ Device register error:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
+// Auto login using saved device MAC ID
+app.post("/api/device/check", async (req, res) => {
+  console.log(" /api/device/check API called");
+
+  const { macId } = req.body;
+  if (!macId) return res.status(400).json({ msg: "Missing macId" });
+
+  try {
+    const device = await DeviceInfo.findOne({ macId }).populate("user");
+
+    if (!device) {
+      return res.status(404).json({ msg: "Device not registered. Contact admin." });
+    }
+
+    if (!device.hasLoggedInOnce) {
+      return res.status(403).json({ msg: "Device not authorized" });
+    }
+
+    if (!device.user.isApproved) {
+      return res.status(403).json({ msg: "User not approved by admin" });
+    }
+
+    const token = jwt.sign(
+      { id: device.user._id, role: device.user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    await Session.create({
+      user: device.user._id,
+      expiresAt: new Date(Date.now() + 8 * 3600000),
+    });
+
+    await logActivity(device.user._id, "auto-login", req);
+
+    res.json({
+      token,
+      user: {
+        id: device.user._id,
+        name: device.user.name,
+        role: device.user.role,
+      },
+    });
+  } catch (err) {
+    console.error("❌ Device auto-login error:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// Return approved users (for Flutter login search)
+app.get("/api/auth/me-list", async (req, res) => {
+  console.log(" /me-list API called");
+  try {
+    const users = await User.find({ isApproved: true }).select("name contact isApproved");
+    res.json({ users });
+  } catch (err) {
+    console.error("Error fetching users list:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
+// Get currently logged-in user info
+app.get("/api/auth/me", authenticateToken, async (req, res) => {
+  console.log(" /me API called");
+  try {
+    const user = await User.findById(req.user.id).select("name role");
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+    res.json({
+      name: user.name,
+      role: user.role,
+      // employeeId: user.employeeId || null,
+      date: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("Error fetching current user info:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
+
+
+// --- EXPORTS ---
 
 
 
