@@ -725,18 +725,43 @@ app.post("/api/device/check", async (req, res) => {
   }
 });
 
+
+const JWT_SECRET = process.env.JWT_SECRET
+
 // Return approved users (for Flutter login search)
+// app.get("/api/auth/me-list", async (req, res) => {
+//   console.log(" /me-list API called");
+//   try {
+//     const users = await User.find({ isApproved: true }).select("name contact isApproved");
+//     res.json({ users });
+//   } catch (err) {
+//     console.error("Error fetching users list:", err);
+//     res.status(500).json({ msg: "Server error" });
+//   }
+// });
+
+
 app.get("/api/auth/me-list", async (req, res) => {
   console.log(" /me-list API called");
   try {
-    const users = await User.find({ isApproved: true }).select("name contact isApproved");
-    res.json({ users });
+    const users = await User.find({ isApproved: true }).select("name contact isApproved role");
+    
+    // Attach JWT token to each user
+    const usersWithTokens = users.map(user => ({
+      _id: user._id,
+      name: user.name,
+      contact: user.contact,
+      role: user.role,
+      isApproved: user.isApproved,
+      token: jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" }) // 🔑 Add token
+    }));
+
+    res.json({ users: usersWithTokens });
   } catch (err) {
     console.error("Error fetching users list:", err);
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 
 // Get currently logged-in user info
 app.get("/api/auth/me", authenticateToken, async (req, res) => {
