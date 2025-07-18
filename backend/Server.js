@@ -25,19 +25,13 @@ const app = express();
 
 app.set("trust proxy", true);
 app.use(express.json());
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: '*',
+}));
 
-// Memory storage so files come in as Buffer
-// const upload = multer({
-//   storage: multer.memoryStorage(),
-//   limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
-//   fileFilter: (_req, file, cb) => {
-//     if (!file.mimetype.startsWith("image/")) {
-//       return cb(new Error("Only images allowed"), false);
-//     }
-//     cb(null, true);
-//   },
-// });
+
+
 
 const reportUpload = multer({
   dest: path.join(__dirname, "uploads"), // temporary local folder
