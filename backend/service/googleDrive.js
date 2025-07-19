@@ -75,30 +75,76 @@ oAuth2Client.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
 const drive = google.drive({ version: "v3", auth: oAuth2Client });
 
 // STEP 2: Upload function
+// async function uploadReportToDrive(filePath, fileName, mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+//   try {
+//     const fileMetadata = {
+//       name: fileName,
+//       parents: [GOOGLE_DRIVE_FOLDER_ID], // upload to the target folder
+//     };
+
+//     const media = {
+//       mimeType,
+//       body: fs.createReadStream(filePath),
+//     };
+
+//     const response = await drive.files.create({
+//       requestBody: fileMetadata,
+//       media,
+//       fields: "id, name",
+//     });
+
+//     console.log("✅ File uploaded to Drive:", response.data);
+//     return response.data.id;
+//   } catch (err) {
+//     console.error("❌ Drive upload failed:", err.message);
+//     throw err;
+//   }
+// }
+
 async function uploadReportToDrive(filePath, fileName, mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
   try {
-    const fileMetadata = {
-      name: fileName,
-      parents: [GOOGLE_DRIVE_FOLDER_ID], // upload to the target folder
-    };
+    // Step 1: Search for existing file with the same name
+    const list = await drive.files.list({
+      q: `name='${fileName}' and '${GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false`,
+      fields: "files(id, name)",
+      spaces: "drive",
+    });
+
+    const existingFile = list.data.files?.[0];
 
     const media = {
       mimeType,
       body: fs.createReadStream(filePath),
     };
 
-    const response = await drive.files.create({
-      requestBody: fileMetadata,
-      media,
-      fields: "id, name",
-    });
+    if (existingFile) {
+      // Step 2A: If exists, update it
+      const response = await drive.files.update({
+        fileId: existingFile.id,
+        media,
+      });
 
-    console.log("✅ File uploaded to Drive:", response.data);
-    return response.data.id;
+      console.log("✅ File updated on Drive:", response.data);
+      return response.data.id;
+    } else {
+      // Step 2B: If not exists, create new
+      const response = await drive.files.create({
+        requestBody: {
+          name: fileName,
+          parents: [GOOGLE_DRIVE_FOLDER_ID],
+        },
+        media,
+        fields: "id, name",
+      });
+
+      console.log("✅ New file created on Drive:", response.data);
+      return response.data.id;
+    }
   } catch (err) {
     console.error("❌ Drive upload failed:", err.message);
     throw err;
   }
 }
+
 
 module.exports = { uploadReportToDrive };

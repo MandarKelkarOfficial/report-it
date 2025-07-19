@@ -745,6 +745,22 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 
 
 
+// app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
+//   try {
+//     const file = req.file;
+//     if (!file) return res.status(400).send("No file received");
+
+//     const fileId = await uploadReportToDrive(file.path, file.originalname, file.mimetype);
+
+//     // Optional: delete the local file after uploading
+//     fs.unlink(file.path, () => null);
+
+//     res.status(200).json({ message: "File uploaded", fileId });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
 app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
   try {
     const file = req.file;
@@ -752,14 +768,18 @@ app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
 
     const fileId = await uploadReportToDrive(file.path, file.originalname, file.mimetype);
 
-    // Optional: delete the local file after uploading
+    // Optional: delete local file after uploading
     fs.unlink(file.path, () => null);
 
     res.status(200).json({ message: "File uploaded", fileId });
   } catch (err) {
+    console.error("Drive upload error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 // 404 handler
 app.use((_, res) => res.status(404).json({ msg: "Not Found" }));
 

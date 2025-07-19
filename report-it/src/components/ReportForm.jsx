@@ -409,7 +409,7 @@ export default function ReportForm({ onAdd }) {
               <option>Open</option>
               <option>In-Progress</option>
               <option>Done</option>
-              <option>Closed</option>
+              {/* <option>Closed</option> */}
             </select>
           </div>
 
