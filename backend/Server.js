@@ -584,61 +584,24 @@ app.post(
 
 // --- DEVICE ROUTES ---
 // Register device (first login from app)
-// app.post("/api/device/register", authenticateToken, async (req, res) => {
-//   console.log(" /api/device/register API called");
-
-//   const { macId, deviceName } = req.body;
-
-//   if (!macId || !deviceName) {
-//     return res.status(400).json({ msg: "Missing macId or deviceName" });
-//   }
-
-//   try {
-//     const existingMac = await DeviceInfo.findOne({ macId });
-
-//     if (existingMac) {
-//       // MAC already exists — don't allow reuse
-//       return res.status(409).json({ msg: "Device already registered with another user" });
-//     }
-
-//     const existingDevice = await DeviceInfo.findOne({ user: req.user.id });
-
-//     if (existingDevice) {
-//       // User already has a device, deny registration from new device
-//       return res.status(403).json({
-//         msg: "Device already registered. Please contact admin to approve new device.",
-//       });
-//     }
-
-//     await DeviceInfo.create({
-//       user: req.user.id,
-//       macId,
-//       deviceName,
-//       hasLoggedInOnce: true,
-//     });
-
-//     res.status(201).json({ msg: "✅ Device registered successfully." });
-//   } catch (err) {
-//     console.error("❌ Device register error:", err);
-//     res.status(500).json({ msg: "Server error" });
-//   }
-// });
 
 
-app.post("/api/device/register", authenticateToken, async (req, res) => {
+
+
+app.post("/api/device/register", async (req, res) => {
   console.log(" /api/device/register API called");
 
-  const { macId, deviceName, force } = req.body;
+  const { macId, deviceName, force, userId } = req.body;
 
-  if (!macId || !deviceName) {
-    return res.status(400).json({ msg: "Missing macId or deviceName" });
+  if (!macId || !deviceName || !userId) {
+    return res.status(400).json({ msg: "Missing macId, deviceName, or userId" });
   }
 
   try {
-    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ msg: "User not found" });
 
     const existingMac = await DeviceInfo.findOne({ macId });
-
     if (existingMac) {
       return res.status(409).json({ msg: "Device already registered with another user" });
     }
@@ -651,16 +614,15 @@ app.post("/api/device/register", authenticateToken, async (req, res) => {
       });
     }
 
-    // Mark user as unapproved (requires admin intervention)
-    await User.findByIdAndUpdate(userId, {
-      isApproved: false,
-      deviceNote: "Login attempt from new device - approval required",
-    });
+    // ❗Only mark as unapproved if already approved
+    if (user.isApproved) {
+      await User.findByIdAndUpdate(userId, {
+        isApproved: false,
+        deviceNote: "Login attempt from new device - approval required",
+      });
+    }
 
-    // Remove old devices (optional if one-device policy)
-    // await DeviceInfo.deleteMany({ user: userId });
-
-    // Register new device
+    // Register device
     await DeviceInfo.create({
       user: userId,
       macId,
@@ -668,12 +630,15 @@ app.post("/api/device/register", authenticateToken, async (req, res) => {
       hasLoggedInOnce: true,
     });
 
-    res.status(201).json({ msg: "Device registered, waiting for admin approval." });
+    return res.status(201).json({ msg: "Device registered, waiting for admin approval." });
+
   } catch (err) {
     console.error("❌ Device register error:", err);
-    res.status(500).json({ msg: "Server error" });
+    return res.status(500).json({ msg: "Server error" });
   }
 });
+
+
 
 
 app.post("/api/device/check", async (req, res) => {
