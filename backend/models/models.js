@@ -23,7 +23,7 @@ const UserSchema = new Schema(
     contact: { type: String, required: true },
     role: {
       type: String,
-      enum: ["admin", "field-agent", "manager"],
+      enum: ["admin", "Project-Engineer", "Project-Manager","Electrician","Fitter"],
       default: "field-agent",
     },
     isApproved: { type: Boolean, default: false },

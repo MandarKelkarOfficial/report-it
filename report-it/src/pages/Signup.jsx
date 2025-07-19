@@ -98,10 +98,10 @@ export default function Signup() {
                 required
               >
                 {/* <option value="field-agent">Field Agent</option> */}
-                <option value="manager">Project Manager</option>
-                <option value="manager">Project Engineer</option>
-                <option value="manager">Fitter</option>
-                <option value="manager">Electrician</option>
+                <option value="Project-Manager">Project Manager</option>
+                <option value="Project-Engineer">Project Engineer</option>
+                <option value="Fitter">Fitter</option>
+                <option value="Electrician">Electrician</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
                 <svg
