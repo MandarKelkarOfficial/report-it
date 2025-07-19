@@ -73,8 +73,8 @@ async function logActivity(userId, action, req) {
   const ip = Array.isArray(forwarded)
     ? forwarded[0]
     : typeof forwarded === "string"
-    ? forwarded.split(",")[0].trim()
-    : req.ip || req.socket.remoteAddress || "unknown";
+      ? forwarded.split(",")[0].trim()
+      : req.ip || req.socket.remoteAddress || "unknown";
 
   await ActivityLog.create({
     user: userId,
@@ -198,7 +198,7 @@ app.post("/api/auth/logout", authenticateToken, async (req, res) => {
 app.post("/api/reports", authenticateToken, async (req, res) => {
   try {
     // Pull everything off the body that your schema now needs
-    const { projectName, projectNumber, customer, workDone, priority, status } =
+    const { projectName, projectNumber, customer, workDone, priority, status, location, } =
       req.body;
 
     // 🔍 Fetch the full user to get their name
@@ -217,7 +217,13 @@ app.post("/api/reports", authenticateToken, async (req, res) => {
       workDone,
       priority,
       status, // required now
-      // optional
+      location: location && location.latitude && location.longitude
+        ? {
+          latitude: location.latitude,
+          longitude: location.longitude,
+           address: location.address || undefined,
+        }
+        : undefined,
     });
 
     // Log the creation activity
@@ -700,7 +706,7 @@ app.get("/api/auth/me-list", async (req, res) => {
   console.log(" /me-list API called");
   try {
     const users = await User.find({ isApproved: true }).select("name contact isApproved role");
-    
+
     // Attach JWT token to each user
     const usersWithTokens = users.map(user => ({
       _id: user._id,
@@ -745,21 +751,7 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 
 
 
-// app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
-//   try {
-//     const file = req.file;
-//     if (!file) return res.status(400).send("No file received");
 
-//     const fileId = await uploadReportToDrive(file.path, file.originalname, file.mimetype);
-
-//     // Optional: delete the local file after uploading
-//     fs.unlink(file.path, () => null);
-
-//     res.status(200).json({ message: "File uploaded", fileId });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
 
 app.post("/api/upload-to-drive", upload.single("report"), async (req, res) => {
   try {

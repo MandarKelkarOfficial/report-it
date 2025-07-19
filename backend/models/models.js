@@ -150,6 +150,7 @@ const ReportSchema = new Schema(
       type: {
         latitude: Number,
         longitude: Number,
+        address: String,
       },
       required: false,
     },

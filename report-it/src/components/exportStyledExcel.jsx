@@ -226,10 +226,10 @@ export function useStyledExport(data) {
       { header: "Project ID", key: "projectId", width: 15 },
       { header: "Project Name", key: "projectName", width: 25 },
       { header: "Customer", key: "customer", width: 20 },
-      { header: "Work Done", key: "workDone", width: 30 },
+      { header: "Work Done", key: "workDone", width: 40 },
       { header: "Status", key: "status", width: 15 },
       { header: "Priority", key: "priority", width: 12 },
-      { header: "Location", key: "location", width: 18 },
+      { header: "Location", key: "location", width: 20 },
     ];
 
     ws.getRow(1).font = { bold: true };
@@ -250,7 +250,7 @@ export function useStyledExport(data) {
         workDone: Array.isArray(r.workDone) ? r.workDone.join(", ") : r.workDone,
         status: r.status,
         priority: r.priority,
-        location: "N/A",
+        location: r.location?.address || "N/A",
       });
     });
 
