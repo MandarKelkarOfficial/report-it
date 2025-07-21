@@ -398,7 +398,7 @@ export default function ReportList({ data }) {
                       {r.priority}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">N/A</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{r.location?.address || 'NA'}</td>
                 </tr>
               ))}
             </tbody>

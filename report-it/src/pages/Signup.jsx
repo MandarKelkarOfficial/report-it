@@ -10,7 +10,7 @@ export default function Signup() {
     email: "",
     password: "",
     contact: "",
-    role: "field-agent",
+    role: "project-engineer",
   });
   const [signupError, setSignupError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,10 +98,10 @@ export default function Signup() {
                 required
               >
                 {/* <option value="field-agent">Field Agent</option> */}
-                <option value="Project-Manager">Project Manager</option>
-                <option value="Project-Engineer">Project Engineer</option>
-                <option value="Fitter">Fitter</option>
-                <option value="Electrician">Electrician</option>
+                <option value="project-manager">Project Manager</option>
+                <option value="project-engineer">Project Engineer</option>
+                <option value="fitter">Fitter</option>
+                <option value="electrician">Electrician</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
                 <svg

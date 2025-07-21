@@ -8,6 +8,8 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { uploadReportToDrive } = require("./service/googleDrive");
+const { appendReportToExcelDrive } = require("./service/excelService");
+const { appendStyledReportToExcelDrive } = require("./service/exportStyledExcel");
 require("dotenv").config();
 
 const {
@@ -136,7 +138,7 @@ app.post("/api/auth/signup", async (req, res) => {
 });
 
 // Login
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", async (req, res) => { 
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user) return res.status(401).json({ msg: "Invalid credentials" });
@@ -168,13 +170,13 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // Get profile
-app.get("/api/auth/me", authenticateToken, async (req, res) => {
-  const user = await User.findById(
-    req.user.id,
-    "-password -resetPasswordToken -twoFactor.secret"
-  );
-  res.json({ user });
-});
+// app.get("/api/auth/me", authenticateToken, async (req, res) => {
+//   const user = await User.findById(
+//     req.user.id,
+//     "-password -resetPasswordToken -twoFactor.secret"
+//   );
+//   res.json({ user });
+// });
 
 app.post("/api/auth/logout", authenticateToken, async (req, res) => {
   try {
@@ -261,12 +263,11 @@ app.get("/api/reports", authenticateToken, async (req, res) => {
   res.json({ reports });
 });
 
+
+
+//---------- Report Device route end  -----------
+
 // --- ADMIN ROUTES ---
-// List pending user approvals
-// app.get('/api/admin/pending-users', authenticateToken, requireAdmin, async (_req, res) => {
-//   const users = await User.find({ isApproved: false }, 'name email');
-//   res.json({ users });
-// });
 
 app.get(
   "/api/admin/pending-users",
@@ -586,12 +587,10 @@ app.post(
 
 
 //Mobile Device Info
-
+// =========================================================================================================
 
 // --- DEVICE ROUTES ---
 // Register device (first login from app)
-
-
 
 
 app.post("/api/device/register", async (req, res) => {
@@ -744,7 +743,125 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
   }
 });
 
+//---------- Report Device route -----------
 
+// app.post("/api/device/reports", authenticateToken, async (req, res) => {
+//   console.log(" /api/device/reports API called");
+//   try {
+//     const { projectName, projectNumber, customer, workDone, priority, status, location } = req.body;
+
+//     const userDoc = await User.findById(req.user.id).select("name");
+//     if (!userDoc) return res.status(404).json({ msg: "User not found" });
+
+//     const report = {
+//       createdAt: new Date(),
+//       createdBy: userDoc.name,
+//       projectNumber,
+//       projectName,
+//       customer,
+//       workDone,
+//       status,
+//       priority,
+//       location: location?.address ? location : { address: "Unknown" },
+//     };
+
+//     // ✅ Append to Excel
+//     appendReportToExcelDrive(report).catch((err) =>
+//       console.error("Excel append error:", err)
+//     );
+
+//     await logActivity(req.user.id, "device-report-excel-only", req);
+
+//     // ✅ Always return a consistent JSON structure
+//     return res.status(201).json({
+//       msg: "Report received and exported to Excel.",
+//       report: null,  // Important: return 'report' key even if null
+//     });
+//   } catch (err) {
+//     console.error("Device Report Error:", err);
+//     return res.status(500).json({ msg: "Server error" });
+//   }
+// });
+
+
+// app.post("/api/device/reports", authenticateToken, async (req, res) => {
+//   try {
+//     const { projectName, projectNumber, customer, workDone, status, location, nextActionFromPrecimac, nextActionFromCustomer } = req.body;
+
+//     // ✅ Fetch user name from auth
+//     const userDoc = await User.findById(req.user.id).select("name");
+//     if (!userDoc) return res.status(404).json({ msg: "User not found" });
+
+//     // ✅ Compose the report (no DB storage)
+//     const report = {
+//       createdAt: new Date(),
+//       createdBy: userDoc.name,
+//       projectNumber,
+//       projectName,
+//       customer,
+//       workDone,
+//       status,
+//       nextActionFromPrecimac,
+//       nextActionFromCustomer,
+//       location: location?.address ? location : { address: "Unknown" },
+//     };
+
+//     // ✅ Send to Excel only
+//     await appendReportToExcelDrive(report);
+
+//     // ✅ Log user action
+//     await logActivity(req.user.id, "device-report-excel-only", req);
+
+//     return res.status(201).json({ msg: "Report received and exported to Excel.", report });
+//   } catch (err) {
+//     console.error("Device Report Error:", err);
+//     return res.status(500).json({ msg: "Server error" });
+//   }
+// });
+
+// 📁 /api/device/upload-to-drive
+app.post("/api/device/upload-to-drive", authenticateToken, async (req, res) => {
+  try {
+    const {
+      projectName,
+      projectNumber,
+      customer,
+      workDone,
+      status,
+      location,
+      nextActionFromPrecimac,
+      nextActionFromCustomer,
+    } = req.body;
+
+    // ✅ Get user name from token
+    const userDoc = await User.findById(req.user.id).select("name");
+    if (!userDoc) return res.status(404).json({ msg: "User not found" });
+
+    const report = {
+      createdAt: new Date(),
+      createdBy: userDoc.name,
+      projectNumber,
+      projectName,
+      customer,
+      workDone,
+      status,
+      nextActionFromPrecimac,
+      nextActionFromCustomer,
+      location: location?.address ? location : { address: "Unknown" },
+    };
+
+    // ✅ Styled Excel + Upload
+    await appendStyledReportToExcelDrive(report);
+
+    // ✅ Log activity
+    await logActivity(req.user.id, "device-report-upload-to-drive", req);
+
+    return res.status(201).json({ msg: "Report exported to Drive." });
+  } catch (err) {
+    console.error("❌ Upload-to-Drive Error:", err);
+    return res.status(500).json({ msg: "Server error" });
+  }
+});
 
 
 // --- EXPORTS ---

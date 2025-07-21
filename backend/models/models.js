@@ -23,8 +23,8 @@ const UserSchema = new Schema(
     contact: { type: String, required: true },
     role: {
       type: String,
-      enum: ["admin", "Project-Engineer", "Project-Manager","Electrician","Fitter"],
-      default: "field-agent",
+      enum: ["admin", "project-engineer", "project-manager","electrician","fitter"],
+      default: "project-engineer",
     },
     isApproved: { type: Boolean, default: false },
     // Two‐Factor Auth (e.g. TOTP secret)
