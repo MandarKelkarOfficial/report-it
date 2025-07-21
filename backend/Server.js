@@ -10,6 +10,7 @@ const fs = require("fs");
 const { uploadReportToDrive } = require("./service/googleDrive");
 const { appendReportToExcelDrive } = require("./service/excelService");
 const { appendStyledReportToExcelDrive } = require("./service/exportStyledExcel");
+const { appendReport } = require("./service/googleSheetsAppend");
 require("dotenv").config();
 
 const {
@@ -593,10 +594,60 @@ app.post(
 // Register device (first login from app)
 
 
+// app.post("/api/device/register", async (req, res) => {
+//   console.log(" /api/device/register API called");
+
+//   const { macId, deviceName, force, userId } = req.body;
+
+//   if (!macId || !deviceName || !userId) {
+//     return res.status(400).json({ msg: "Missing macId, deviceName, or userId" });
+//   }
+
+//   try {
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(404).json({ msg: "User not found" });
+
+//     const existingMac = await DeviceInfo.findOne({ macId });
+//     if (existingMac) {
+//       return res.status(409).json({ msg: "Device already registered with another user" });
+//     }
+
+//     const existingDevice = await DeviceInfo.findOne({ user: userId });
+
+//     if (existingDevice && !force) {
+//       return res.status(403).json({
+//         msg: "Device already registered. Click 'Register New Device' if this is a new device.",
+//       });
+//     }
+
+//     // ❗Only mark as unapproved if already approved
+//     if (user.isApproved) {
+//       await User.findByIdAndUpdate(userId, {
+//         isApproved: false,
+//         deviceNote: "Login attempt from new device - approval required",
+//       });
+//     }
+
+//     // Register device
+//     await DeviceInfo.create({
+//       user: userId,
+//       macId,
+//       deviceName,
+//       hasLoggedInOnce: true,
+//     });
+
+//     return res.status(201).json({ msg: "Device registered, waiting for admin approval." });
+
+//   } catch (err) {
+//     console.error("❌ Device register error:", err);
+//     return res.status(500).json({ msg: "Server error" });
+//   }
+// });
+
 app.post("/api/device/register", async (req, res) => {
   console.log(" /api/device/register API called");
 
-  const { macId, deviceName, force, userId } = req.body;
+  const { macId, deviceName, userId } = req.body;
 
   if (!macId || !deviceName || !userId) {
     return res.status(400).json({ msg: "Missing macId, deviceName, or userId" });
@@ -606,28 +657,29 @@ app.post("/api/device/register", async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ msg: "User not found" });
 
+    // 💣 Prevent reuse of same macId (by any user)
     const existingMac = await DeviceInfo.findOne({ macId });
     if (existingMac) {
-      return res.status(409).json({ msg: "Device already registered with another user" });
+      return res.status(409).json({ msg: "❌ Device already registered by another user" });
     }
 
+    // 💣 Prevent user from registering another device (1 device per user)
     const existingDevice = await DeviceInfo.findOne({ user: userId });
-
-    if (existingDevice && !force) {
+    if (existingDevice) {
       return res.status(403).json({
-        msg: "Device already registered. Click 'Register New Device' if this is a new device.",
+        msg: "❌ You have already registered a device. Only 1 device is allowed per user.",
       });
     }
 
-    // ❗Only mark as unapproved if already approved
+    // ❗Only mark user as unapproved if currently approved
     if (user.isApproved) {
       await User.findByIdAndUpdate(userId, {
         isApproved: false,
-        deviceNote: "Login attempt from new device - approval required",
+        deviceNote: "Login attempt from a new device - admin approval required",
       });
     }
 
-    // Register device
+    // ✅ Register device
     await DeviceInfo.create({
       user: userId,
       macId,
@@ -635,13 +687,16 @@ app.post("/api/device/register", async (req, res) => {
       hasLoggedInOnce: true,
     });
 
-    return res.status(201).json({ msg: "Device registered, waiting for admin approval." });
+    return res.status(201).json({
+      msg: "✅ Device registered successfully. Awaiting admin approval.",
+    });
 
   } catch (err) {
     console.error("❌ Device register error:", err);
     return res.status(500).json({ msg: "Server error" });
   }
 });
+
 
 
 
@@ -851,7 +906,8 @@ app.post("/api/device/upload-to-drive", authenticateToken, async (req, res) => {
     };
 
     // ✅ Styled Excel + Upload
-    await appendStyledReportToExcelDrive(report);
+    await appendReport(report);
+    // await appendStyledReportToExcelDrive(report);
 
     // ✅ Log activity
     await logActivity(req.user.id, "device-report-upload-to-drive", req);
