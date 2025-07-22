@@ -62,7 +62,7 @@ async function appendReport(report) {
       spreadsheetId,
       range,
       valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
+      // insertDataOption: 'INSERT_ROWS',
       requestBody: {
         values: [row],
         majorDimension: 'ROWS',
