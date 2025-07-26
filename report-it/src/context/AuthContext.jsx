@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
+
 export function useAuth() {
   return useContext(AuthContext);
 }
@@ -14,10 +15,10 @@ const API = axios.create({
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);    // optional: show spinner while we check /me
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Set the token on our axios instance
+  // Set token in axios and localStorage
   const setToken = token => {
     if (token) {
       API.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -28,18 +29,22 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // On mount: load user + token from localStorage, validate with /me
+  // Load user from saved token and validate with /auth/me
   useEffect(() => {
-    const savedUser = JSON.parse(localStorage.getItem('report-it-user'));
     const savedToken = localStorage.getItem('report-it-token');
-    if (savedUser && savedToken) {
+
+    if (savedToken) {
       setToken(savedToken);
       API.get('/auth/me')
-        .then(res => setUser(res.data.user))
+        .then(res => {
+          const freshUser = res.data.user;
+          setUser(freshUser);
+          localStorage.setItem('report-it-user', JSON.stringify(freshUser)); // ✅ update user data with latest role
+        })
         .catch(() => {
-          // token expired or invalid
           setUser(null);
           setToken(null);
+          localStorage.removeItem('report-it-user');
         })
         .finally(() => setLoading(false));
     } else {
@@ -47,30 +52,27 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Login: hit /auth/login, store user + token
-// … inside AuthProvider …
-const login = async (email, password) => {
-  try {
-    const { data } = await API.post('/auth/login', { email, password });
-    setToken(data.token);
-    setUser(data.user);
-    localStorage.setItem('report-it-user', JSON.stringify(data.user));
-    navigate('/dashboard');
-  } catch (err) {
-    // Grab the server‐sent msg (or default)
-    const msg = err.response?.data?.msg || 'Login failed';
-    throw new Error(msg);
-  }
-};
+  // Login: store token + user
+  const login = async (email, password) => {
+    try {
+      const { data } = await API.post('/auth/login', { email, password });
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('report-it-user', JSON.stringify(data.user));
+      navigate('/dashboard');
+    } catch (err) {
+      const msg = err.response?.data?.msg || 'Login failed';
+      throw new Error(msg);
+    }
+  };
 
-
-  // Signup: hit /auth/signup
+  // Signup: basic redirection after success
   const signup = async info => {
     await API.post('/auth/signup', info);
     navigate('/login');
   };
 
-  // Logout: hit /auth/logout, clear everything
+  // Logout: nuke everything
   const logout = async () => {
     try {
       await API.post('/auth/logout');
@@ -83,14 +85,20 @@ const login = async (email, password) => {
     navigate('/login');
   };
 
-  // Expose context values
+  // Context value exposed to app
   const value = { user, login, signup, logout, loading };
 
-  // While checking token on load, hold off rendering children
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading…</div>;
+  // Show loading screen while verifying token
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen text-xl font-medium">
+        Loading…
+      </div>
+    );
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// Add this export at the bottom of AuthContext.jsx
+// Export API instance too
 export { API };

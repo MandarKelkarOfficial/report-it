@@ -4,11 +4,30 @@ import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 
 // Role Titles Map
-const roleTitles = {
-  admin: "System Administrator",
-  manager: "Project Manager",
-  "field-agent": "Field Agent",
+// const roleTitles = {
+//   admin: "System Administrator",
+//   manager: "Project Manager",
+//  agent: ["project-engineer", "fitter", "electrician"],
+// };
+
+// 🔄 Real roles mapped to internal dashboard roles
+const roleMap = {
+  admin: "admin",
+  "project-manager": "manager",
+  "project-engineer": "agent",
+  fitter: "agent",
+  electrician: "agent",
 };
+
+const handleDownload = () => {
+  const link = document.createElement("a");
+  link.href = "/app/app-release.apk"; // because it's in public/
+  link.setAttribute("download", "reportit.apk");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 
 // Tailwind Color Classes Map
 const colorClasses = {
@@ -52,9 +71,8 @@ function ActivityItem({ description, timestamp, type }) {
         </p>
       </div>
       <span
-        className={`px-2 py-1 text-xs rounded-full ${
-          typeStyles[type] || typeStyles.default
-        }`}
+        className={`px-2 py-1 text-xs rounded-full ${typeStyles[type] || typeStyles.default
+          }`}
       >
         {type}
       </span>
@@ -72,17 +90,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const dashboardRole = roleMap[user.role];
       try {
         const endpoints = {
           admin: "/admin/dashboard-stats",
           manager: "/manager/dashboard-stats",
-          "field-agent": "/agent/dashboard-stats",
+          agent: "/agent/dashboard-stats",
         };
 
-        const endpoint = endpoints[user.role] || endpoints["field-agent"];
+        //  const endpoint = endpoints[user.role];
+        if (!dashboardRole) {
+          console.error("Unrecognized role:", user.role);
+          return;
+        }
+        const endpoint = endpoints[dashboardRole];
         const { data } = await API.get(endpoint);
 
-        if (user.role === "field-agent") {
+        if (user.role === "project-engineer" || user.role === "fitter" || user.role === "electrician") {
           // backend returns { totalReports, minutesSinceLogin }
           setDashboardData({
             stats: {
@@ -136,7 +160,7 @@ export default function Dashboard() {
         color: "purple",
       },
     ],
-    "field-agent": [
+    agent: [
       {
         title: "Total Reports",
         value: dashboardData.stats.totalReports,
@@ -161,46 +185,36 @@ export default function Dashboard() {
               Welcome back,{" "}
               <span className="text-blue-600">{user?.name}</span>!
               <span className="block text-sm font-normal text-gray-500 mt-1">
-                {roleTitles[user.role] || "Unknown Role"}
+                {roleMap[user.role] || "Unknown Role"}
               </span>
             </h1>
 
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin inline-block w-8 h-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
-              </div>
-            ) : (
-              <>
-                {/* Stats grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {roleBasedStats[user.role]?.map((stat, idx) => (
-                    <StatCard key={idx} {...stat} />
-                  ))}
-                </div>
+       {loading ? (
+  <div className="text-center py-12">
+    <div className="animate-spin inline-block w-8 h-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+  </div>
+) : (
+  <>
+    {/* Stats grid */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {roleBasedStats[user.roleMap]?.map((stat, idx) => (
+        <StatCard key={idx} {...stat} />
+      ))}
+    </div>
 
-                {/* Recent Activity only for admin/manager */}
-                {user.role !== "field-agent" && (
-                  <div className="mt-12">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                      Recent Activity
-                    </h2>
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                      {dashboardData.activity.length === 0 ? (
-                        <div className="p-6 text-gray-500">
-                          No recent activity
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-gray-200">
-                          {dashboardData.activity.map((item, i) => (
-                            <ActivityItem key={i} {...item} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+    {/* Download App Button */}
+    <div className="text-center mt-8">
+<button
+  onClick={handleDownload}
+  className="mt-6 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition"
+>
+  ⬇️ Download Precimac App (APK)
+</button>
+
+    </div>
+  </>
+)}
+
           </div>
         </div>
       </main>

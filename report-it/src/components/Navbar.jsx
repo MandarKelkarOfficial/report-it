@@ -39,7 +39,12 @@ export default function Navbar() {
               className="hidden md:flex items-center space-x-8"
               role="menubar"
             >
-              <li role="none">
+             
+              {user?.role === "admin" && (
+                <>
+
+
+                 <li role="none">
                 <Link
                   to="/dashboard"
                   role="menuitem"
@@ -68,8 +73,6 @@ export default function Navbar() {
                   View Reports
                 </Link>
               </li>
-              {user?.role === "admin" && (
-                <>
                   <li role="none">
                     <Link
                       to="/admin/users"

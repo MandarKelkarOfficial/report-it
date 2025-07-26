@@ -105,12 +105,14 @@ function requireAdmin(req, res, next) {
   next();
 }
 function requireAgent(req, res, next) {
-  if (req.user.role !== "field-agent") return res.sendStatus(403);
+  const allowedRoles = ["project-engineer", "fitter", "electrician"];
+  if (!allowedRoles.includes(req.user.role)) return res.sendStatus(403);
   next();
 }
 
+
 function requireManager(req, res, next) {
-  if (req.user.role !== "manager") return res.sendStatus(403);
+  if (req.user.role !== "project-manager") return res.sendStatus(403);
   next();
 }
 
@@ -594,56 +596,6 @@ app.post(
 // Register device (first login from app)
 
 
-// app.post("/api/device/register", async (req, res) => {
-//   console.log(" /api/device/register API called");
-
-//   const { macId, deviceName, force, userId } = req.body;
-
-//   if (!macId || !deviceName || !userId) {
-//     return res.status(400).json({ msg: "Missing macId, deviceName, or userId" });
-//   }
-
-//   try {
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ msg: "User not found" });
-
-//     const existingMac = await DeviceInfo.findOne({ macId });
-//     if (existingMac) {
-//       return res.status(409).json({ msg: "Device already registered with another user" });
-//     }
-
-//     const existingDevice = await DeviceInfo.findOne({ user: userId });
-
-//     if (existingDevice && !force) {
-//       return res.status(403).json({
-//         msg: "Device already registered. Click 'Register New Device' if this is a new device.",
-//       });
-//     }
-
-//     // ❗Only mark as unapproved if already approved
-//     if (user.isApproved) {
-//       await User.findByIdAndUpdate(userId, {
-//         isApproved: false,
-//         deviceNote: "Login attempt from new device - approval required",
-//       });
-//     }
-
-//     // Register device
-//     await DeviceInfo.create({
-//       user: userId,
-//       macId,
-//       deviceName,
-//       hasLoggedInOnce: true,
-//     });
-
-//     return res.status(201).json({ msg: "Device registered, waiting for admin approval." });
-
-//   } catch (err) {
-//     console.error("❌ Device register error:", err);
-//     return res.status(500).json({ msg: "Server error" });
-//   }
-// });
-
 app.post("/api/device/register", async (req, res) => {
   console.log(" /api/device/register API called");
 
@@ -687,6 +639,7 @@ app.post("/api/device/register", async (req, res) => {
       hasLoggedInOnce: true,
     });
 
+    
     return res.status(201).json({
       msg: "✅ Device registered successfully. Awaiting admin approval.",
     });
@@ -756,7 +709,7 @@ app.post("/api/device/check", async (req, res) => {
 
 
 
-app.get("/api/auth/me-list", async (req, res) => {
+app.get("/api/auth/me-list",authenticateToken, async (req, res) => {
   console.log(" /me-list API called");
   try {
     const users = await User.find({ isApproved: true }).select("name contact isApproved role");
@@ -780,7 +733,7 @@ app.get("/api/auth/me-list", async (req, res) => {
 
 // Get currently logged-in user info
 app.get("/api/auth/me", authenticateToken, async (req, res) => {
-  console.log(" /me API called");
+  // console.log(" /me API called");
   try {
     const user = await User.findById(req.user.id).select("name role");
     if (!user) {
