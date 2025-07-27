@@ -709,7 +709,7 @@ app.post("/api/device/check", async (req, res) => {
 
 
 
-app.get("/api/auth/me-list",authenticateToken, async (req, res) => {
+app.get("/api/auth/me-list", async (req, res) => {
   console.log(" /me-list API called");
   try {
     const users = await User.find({ isApproved: true }).select("name contact isApproved role");
